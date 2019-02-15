@@ -290,6 +290,7 @@ static void read_reg() {
           .p_user_data = NULL,
           .p_transfers = transfers,
           .number_of_transfers = sizeof(transfers) / sizeof(transfers[0])};
+  got_callback = false;
 
   APP_ERROR_CHECK(app_twi_schedule(&m_app_twi, &transaction));
 }
@@ -305,11 +306,26 @@ void write_reg_cb(ret_code_t result, void *p_user_data) {
   NRF_LOG_INFO("data written\n");
 }
 
-////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////// write_reg2 //////////////////////////////////////////
+// value to write is in config
+// uses twi_perform
+static void write_reg2() {
+  app_twi_transfer_t const write_adxl345_data_format[] =
+      {
+          APP_TWI_WRITE(ADXL345_DEVICE, config, sizeof(config), 0)
+
+      };
+  APP_ERROR_CHECK(app_twi_perform(&m_app_twi, write_adxl345_data_format,
+      1, NULL));
+}
+
+////////////////////////////////////// write_reg //////////////////////////////////////////
+// value to write is in config
+// uses twi_schedule
 static void write_reg() {
   static app_twi_transfer_t const transfers[] =
-    {
-        APP_TWI_WRITE(ADXL345_DEVICE, config, sizeof(config), 0),
+      {
+          APP_TWI_WRITE(ADXL345_DEVICE, config, sizeof(config), 0),
 
       };
   static app_twi_transaction_t const transaction =
@@ -323,10 +339,44 @@ static void write_reg() {
 }
 
 #if (BUFFER_SIZE < 7)
-    #error Buffer too small.
+#error Buffer too small.
 #endif
+/*************************** SET RANGE **************************/
+/*          ACCEPTABLE VALUES: 2g, 4g, 8g, 16g ~ GET & SET          */
+void set_range(uint8_t _s) {
+
+  reg_addr = ADXL345_DATA_FORMAT;
+  read_reg();
+  while (!got_callback) {
+    ;
+    ;
+  }
+
+  switch (8) {
+  case 2:
+    _s = 0b00000000;
+    break;
+  case 4:
+    _s = 0b00000001;
+    break;
+  case 8:
+    _s = 0b00000010;
+    break;
+  case 16:
+    _s = 0b00000011;
+    break;
+  default:
+    _s = 0b00000000;
+  }
+
+  _s |= (m_buffer[0] & 0b11101100);
+  config[0] = ADXL345_DATA_FORMAT;
+  config[1] = _s;
+  write_reg2();
+}
 ////////////////////////////////////////////////////////////////////////////////
 // read_reg and call back
+// result of read is in m_buffer[]
 
 static void read_lm75b_registers_cb(ret_code_t result, void * p_user_data)
 {
@@ -490,11 +540,13 @@ static void twi_config(void)
 // RTC tick events generation.
 static void rtc_handler(nrf_drv_rtc_int_type_t int_type)
 {
+    static uint8_t tick_count;
     if (int_type == NRF_DRV_RTC_INT_TICK)
     {
         // On each RTC tick (their frequency is set in "nrf_drv_config.h")
         // we read data from our sensors.
-        read_all();
+        ++tick_count;
+        if ((tick_count % 16) == 0) read_all();
     }
 }
 static void rtc_config(void)
@@ -561,58 +613,15 @@ int main(void)
     /*************************** GET DATA FORMAT **************************/
 
     for (uint8_t i = 0x30; i < 0x38; i++) {
-      got_callback = false;
       reg_addr = i;
       read_reg();
       while (!got_callback) {;;}
       NRF_LOG_FLUSH();
     }
-
-    /*************************** DEFINE RANGE **************************/
-    /*          ACCEPTABLE VALUES: 2g, 4g, 8g, 16g ~ GET & SET          */
-    uint8_t _s;
-    uint8_t _b = 0;
-
-    switch (8) {
-    case 2:
-      _s = 0b00000000;
-      break;
-    case 4:
-      _s = 0b00000001;
-      break;
-    case 8:
-      _s = 0b00000010;
-      break;
-    case 16:
-      _s = 0b00000011;
-      break;
-    default:
-      _s = 0b00000000;
-    }
-
-    _s |= (_b & 0b11101100);
-    NRF_LOG_INFO("_s: %d\n", _s);
-    config[0] = ADXL345_DATA_FORMAT;
-    config[1] = _s;
-    write_reg();
-
-    reg_addr = ADXL345_DATA_FORMAT;
-    read_reg();
-    NRF_LOG_FLUSH();
-
-    ///*************************** SET RANGE **************************/
-    static uint8_t default_config3[] = {ADXL345_DATA_FORMAT, 0};
-    default_config3[1] = 3;
-    app_twi_transfer_t const write_adxl345_data_format[] =
-        {
-            APP_TWI_WRITE(ADXL345_DEVICE, &default_config3[0], sizeof(default_config3), 0)
-
-        };
-    APP_ERROR_CHECK(app_twi_perform(&m_app_twi, write_adxl345_data_format,
-        1, NULL));
+    set_range(4);
 
 
-    //    ///*************************** CHECK **************************/
+    //*************************** CHECK **************************/
 
     reg_addr = ADXL345_DATA_FORMAT;
     read_reg();
@@ -621,15 +630,6 @@ int main(void)
 
 
 
-
-    //    ///*************************** CHECK **************************/
-    //
-    //    APP_ERROR_CHECK(app_twi_perform(&m_app_twi, read_adxl345_data_format,
-    //        1, NULL));
-    //
-    //                NRF_LOG_INFO("data_format: %d\n", m_buffer[0]);
-    //
-    //    ///*************************** END **************************/
     rtc_config();
 
     LEDS_ON(LED_0);
