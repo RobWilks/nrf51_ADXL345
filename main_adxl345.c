@@ -84,7 +84,7 @@ static app_twi_t m_app_twi = APP_TWI_INSTANCE(0);
 
 static nrf_drv_rtc_t const m_rtc = NRF_DRV_RTC_INSTANCE(0);
 
-bool read_callback;
+bool got_callback;
 
 // Buffer for data read from sensors.
 #define BUFFER_SIZE  11
@@ -268,7 +268,7 @@ static void read_all(void)
 // read_reg and call back
 
 void read_reg_cb(ret_code_t result, void *p_user_data) {
-  read_callback = true;
+  got_callback = true;
   if (result != NRF_SUCCESS) {
     NRF_LOG_INFO("read_reg_cb - error: %d\r\n", (int)result);
     return;
@@ -561,11 +561,10 @@ int main(void)
     /*************************** GET DATA FORMAT **************************/
 
     for (uint8_t i = 0x30; i < 0x38; i++) {
-      read_callback = false;
+      got_callback = false;
       reg_addr = i;
-      nrf_delay_ms(100);
       read_reg();
-      while (read_callback) {;;}
+      while (!got_callback) {;;}
       NRF_LOG_FLUSH();
     }
 
