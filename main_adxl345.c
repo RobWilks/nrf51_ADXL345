@@ -78,7 +78,6 @@
     #error "Please choose an output pin"
 #endif
 
-static uint8_t config[] = {0, 0};  // Write to regs: address byte then data
 
 static app_twi_t m_app_twi = APP_TWI_INSTANCE(0);
 
@@ -278,10 +277,12 @@ void read_reg_cb(ret_code_t result, void *p_user_data) {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-static void read_reg() {
+static void read_reg(uint8_t address) {
+  static uint8_t register_address;
+  register_address = address;
   static app_twi_transfer_t const transfers[] =
       {
-          ADXL345_READ(&reg_addr, m_buffer, 1)
+          ADXL345_READ(&register_address, m_buffer, 1)
 
       };
   static app_twi_transaction_t const transaction =
@@ -294,8 +295,8 @@ static void read_reg() {
 
   APP_ERROR_CHECK(app_twi_schedule(&m_app_twi, &transaction));
 }
-////////////////////////////////////////////////////////////////////////////////
-// write_reg and call back
+/////////////////////////////////////// write_reg call back /////////////////////////////////////////
+// write_reg call back function
 
 void write_reg_cb(ret_code_t result, void *p_user_data) {
   if (result != NRF_SUCCESS) {
@@ -306,23 +307,15 @@ void write_reg_cb(ret_code_t result, void *p_user_data) {
   NRF_LOG_INFO("data written\n");
 }
 
-////////////////////////////////////// write_reg2 //////////////////////////////////////////
-// value to write is in config
-// uses twi_perform
-static void write_reg2() {
-  app_twi_transfer_t const write_adxl345_data_format[] =
-      {
-          APP_TWI_WRITE(ADXL345_DEVICE, config, sizeof(config), 0)
-
-      };
-  APP_ERROR_CHECK(app_twi_perform(&m_app_twi, write_adxl345_data_format,
-      1, NULL));
-}
-
 ////////////////////////////////////// write_reg //////////////////////////////////////////
 // value to write is in config
 // uses twi_schedule
-static void write_reg() {
+static void write_reg(uint8_t address, uint8_t val) {
+
+  static uint8_t config[2];
+  config[0] = address;
+  config[1] = val;
+
   static app_twi_transfer_t const transfers[] =
       {
           APP_TWI_WRITE(ADXL345_DEVICE, config, sizeof(config), 0),
@@ -341,12 +334,32 @@ static void write_reg() {
 #if (BUFFER_SIZE < 7)
 #error Buffer too small.
 #endif
+
+
+////////////////////////////////////// write_reg2 //////////////////////////////////////////
+// value to write is in config
+// uses twi_perform
+static void write_reg2(uint8_t address, uint8_t val) {
+
+  static uint8_t config[2];
+  config[0] = address;
+  config[1] = val;
+ 
+  app_twi_transfer_t const write_adxl345_data_format[] =
+      {
+          APP_TWI_WRITE(ADXL345_DEVICE, config, sizeof(config), 0)
+
+      };
+  APP_ERROR_CHECK(app_twi_perform(&m_app_twi, write_adxl345_data_format,
+      1, NULL));
+}
+
 /*************************** SET RANGE **************************/
 /*          ACCEPTABLE VALUES: 2g, 4g, 8g, 16g ~ GET & SET          */
-void set_range(uint8_t _s) {
+static void set_range(uint8_t _s) {
 
   reg_addr = ADXL345_DATA_FORMAT;
-  read_reg();
+  read_reg(ADXL345_DATA_FORMAT);
   while (!got_callback) {
     ;
     ;
@@ -370,9 +383,8 @@ void set_range(uint8_t _s) {
   }
 
   _s |= (m_buffer[0] & 0b11101100);
-  config[0] = ADXL345_DATA_FORMAT;
-  config[1] = _s;
-  write_reg2();
+
+  write_reg2(ADXL345_DATA_FORMAT, _s);
 }
 ////////////////////////////////////////////////////////////////////////////////
 // read_reg and call back
@@ -614,7 +626,7 @@ int main(void)
 
     for (uint8_t i = 0x30; i < 0x38; i++) {
       reg_addr = i;
-      read_reg();
+      read_reg(i);
       while (!got_callback) {;;}
       NRF_LOG_FLUSH();
     }
@@ -624,7 +636,7 @@ int main(void)
     //*************************** CHECK **************************/
 
     reg_addr = ADXL345_DATA_FORMAT;
-    read_reg();
+    read_reg(ADXL345_DATA_FORMAT);
     NRF_LOG_FLUSH();
 
 
