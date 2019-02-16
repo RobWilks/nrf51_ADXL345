@@ -41,6 +41,8 @@ rather than in parallel as a byte
 
 #include "stdint.h"
 
+#include "math.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -152,6 +154,10 @@ extern uint8_t reg_addr;
     ADXL345_READ(&adxl345_xout_reg_addr, p_buffer, 6)
 
 #define ADXL345_INIT_TRANSFER_COUNT 3
+
+#define CONSTRAIN(amt,low,high) ((amt)<(low)?(low):((amt)>(high)?(high):(amt)))
+
+
 extern app_twi_transfer_t const adxl345_init_transfers[ADXL345_INIT_TRANSFER_COUNT];
 extern uint8_t m_buffer[];
 extern bool got_callback;
