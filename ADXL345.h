@@ -161,15 +161,14 @@ extern uint8_t reg_addr;
 extern app_twi_transfer_t const adxl345_init_transfers[ADXL345_INIT_TRANSFER_COUNT];
 extern uint8_t m_buffer[];
 extern bool got_callback;
-extern void read_reg(uint8_t address);
+extern void read_data(uint8_t address);
+extern void read_xyz_data(uint8_t address);
 extern void write_reg(uint8_t address, uint8_t val);
 extern void write_reg2(uint8_t address, uint8_t val);
 
 void powerOn();
-void readAccelXYZ(int16_t *xyx);
-void readAccel(int16_t *x, int16_t *y, int16_t *z);
-void get_Gxyz(double *xyz);
-
+void get_Gxyz(void);
+void readAccel(uint8_t address);
 void setTapThreshold(uint8_t tapThreshold);
 uint8_t getTapThreshold();
 void setAxisGains(double *_gains);

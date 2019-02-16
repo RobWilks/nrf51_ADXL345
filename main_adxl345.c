@@ -264,20 +264,20 @@ static void read_all(void)
     APP_ERROR_CHECK(app_twi_schedule(&m_app_twi, &transaction));
 }
 
-////////////////////////////////////// read_reg call back //////////////////////////////////////////
-// read_reg and call back
+////////////////////////////////////// read_data call back //////////////////////////////////////////
+// read_data and call back
 // result of read is in m_buffer[]
 
-void read_reg_cb(ret_code_t result, void *p_user_data) {
+void read_data_cb(ret_code_t result, void *p_user_data) {
   got_callback = true;
   if (result != NRF_SUCCESS) {
-    NRF_LOG_INFO("read_reg_cb - error: %d\r\n", (int)result);
+    NRF_LOG_INFO("read_data_cb - error: %d\r\n", (int)result);
     return;
   }
 }
 
-/////////////////////////////////////// read_reg /////////////////////////////////////////
-void read_reg(uint8_t address) {
+/////////////////////////////////////// read_data /////////////////////////////////////////
+void read_data(uint8_t address) {
   static uint8_t register_address;
   register_address = address;
   static app_twi_transfer_t const transfers[] =
@@ -287,7 +287,44 @@ void read_reg(uint8_t address) {
       };
   static app_twi_transaction_t const transaction =
       {
-          .callback = read_reg_cb,
+          .callback = read_data_cb,
+          .p_user_data = NULL,
+          .p_transfers = transfers,
+          .number_of_transfers = sizeof(transfers) / sizeof(transfers[0])};
+  got_callback = false;
+
+  APP_ERROR_CHECK(app_twi_schedule(&m_app_twi, &transaction));
+}
+////////////////////////////////////// read_xyz_data call back //////////////////////////////////////////
+// read_data and call back
+// result of read is in m_buffer[]
+
+void read_xyz_data_cb(ret_code_t result, void *p_user_data) {
+  got_callback = true;
+  if (result != NRF_SUCCESS) {
+    NRF_LOG_INFO("read_data_cb - error: %d\r\n", (int)result);
+  }
+}
+/////////////////////////////////////// read_xyz_data /////////////////////////////////////////
+void read_xyz_data(uint8_t address) {
+
+  // Signal on LED that something is going on.
+  bsp_board_led_invert(READ_ALL_INDICATOR);
+
+  // [these structures have to be "static" - they cannot be placed on stack
+  //  since the transaction is scheduled and these structures most likely
+  //  will be referred after this function returns]void read_xyz_data(uint8_t address) {
+
+  static uint8_t register_address;
+  register_address = address;
+  static app_twi_transfer_t const transfers[] =
+      {
+          ADXL345_READ(&register_address, m_buffer, ADXL345_TO_READ)
+
+      };
+  static app_twi_transaction_t const transaction =
+      {
+          .callback = read_xyz_data_cb,
           .p_user_data = NULL,
           .p_transfers = transfers,
           .number_of_transfers = sizeof(transfers) / sizeof(transfers[0])};
@@ -300,7 +337,7 @@ void read_reg(uint8_t address) {
 
 void write_reg_cb(ret_code_t result, void *p_user_data) {
   if (result != NRF_SUCCESS) {
-    NRF_LOG_INFO("read_reg_cb - error: %d\r\n", (int)result);
+    NRF_LOG_INFO("read_data_cb - error: %d\r\n", (int)result);
     return;
   }
 
@@ -522,14 +559,18 @@ static void rtc_handler(nrf_drv_rtc_int_type_t int_type)
         // On each RTC tick (their frequency is set in "nrf_drv_config.h")
         // we read data from our sensors.
         ++tick_count;
-        if ((tick_count % 16) == 0) read_all();
+        if ((tick_count % 16) == 0) readAccel(ADXL345_DATAX0);
     }
 }
+
+
+////////////////////////////////////////////////////////////////////////////////
+// Initialize RTC instance with default configuration.
 static void rtc_config(void)
 {
     uint32_t err_code;
 
-    // Initialize RTC instance with default configuration.
+    
     nrf_drv_rtc_config_t config = NRF_DRV_RTC_DEFAULT_CONFIG;
     config.prescaler = RTC_FREQ_TO_PRESCALER(32); //Set RTC frequency to 32Hz
     err_code = nrf_drv_rtc_init(&m_rtc, &config, rtc_handler);
@@ -590,7 +631,7 @@ int main(void)
     /*************************** PRINT REG VALUES **************************/
 
     for (uint8_t i = 0x2f; i < 0x38; i++) {
-      read_reg(i);
+      read_data(i);
       while (!got_callback) {
         ;
         ;
@@ -605,7 +646,7 @@ int main(void)
 
     //*************************** CHECK **************************/
 
-    read_reg(ADXL345_DATA_FORMAT);
+    read_data(ADXL345_DATA_FORMAT);
     NRF_LOG_INFO("data_format: bit0 = %d\n", getRegisterBit(ADXL345_DATA_FORMAT, 0));
     NRF_LOG_INFO("bit1 = %d\n", getRegisterBit(ADXL345_DATA_FORMAT, 1));
     NRF_LOG_FLUSH();

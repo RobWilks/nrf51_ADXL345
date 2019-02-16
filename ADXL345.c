@@ -50,21 +50,45 @@ app_twi_transfer_t const adxl345_init_transfers[ADXL345_INIT_TRANSFER_COUNT] =
         APP_TWI_WRITE(ADXL345_DEVICE, default_config, sizeof(default_config), 0),
         APP_TWI_WRITE(ADXL345_DEVICE, default_config1, sizeof(default_config1), 0),
         APP_TWI_WRITE(ADXL345_DEVICE, default_config2, sizeof(default_config2), 0)};
-//        double gains[3];
-//	gains[0] = 0.00376390;
-//	gains[1] = 0.00376009;
-//	gains[2] = 0.00349265;
 
 double gains[3] = {0.00376390, 0.00376009, 0.00349265};
+int16_t xyz_int[3] = {0, 0, 0};
+double xyz[3] = {0, 0, 0};
 
 bool adxl345_status = ADXL345_OK;
 bool adxl345_error_code = ADXL345_NO_ERROR;
 
+/*********************** READING ACCELERATION ***********************/
+/*    Reads Acceleration into Three Variables:  x, y and z          */
 
+void readAccel(uint8_t address) {
+  read_xyz_data(address); // Read Accel Data from ADXL345
+  while (!got_callback) {
+    ;
+    ;
+  }
+
+  // Each Axis @ All g Ranges: 10 Bit Resolution (2 Bytes)
+
+  xyz_int[0] = (((int)m_buffer[3]) << 8) | m_buffer[2];
+  xyz_int[1] = (((int)m_buffer[5]) << 8) | m_buffer[4];
+  xyz_int[2] = (((int)m_buffer[7]) << 8) | m_buffer[6];
+}
+
+void get_Gxyz() {
+  int i;
+  for (i = 0; i < 3; i++) {
+    xyz[i] = xyz_int[i] * gains[i];
+  }
+}
 
 ////////////////////////////////////// setRegisterBit //////////////////////////////////////////
 void setRegisterBit(uint8_t regAdress, uint8_t bitPos, bool state) {
-  read_reg(regAdress);
+  read_data(regAdress);
+  while (!got_callback) {
+    ;
+    ;
+  }
   if (state) {
     m_buffer[0] |= (1 << bitPos); // Forces nth Bit of _b to 1. Other Bits Unchanged.
   } else {
@@ -75,7 +99,11 @@ void setRegisterBit(uint8_t regAdress, uint8_t bitPos, bool state) {
 ////////////////////////////////////// getRegisterBit //////////////////////////////////////////
 
 bool getRegisterBit(uint8_t regAdress, uint8_t bitPos) {
-  read_reg(regAdress);
+  read_data(regAdress);
+  while (!got_callback) {
+    ;
+    ;
+  }
   return ((m_buffer[0] >> bitPos) & 1);
 }
 
@@ -83,7 +111,7 @@ bool getRegisterBit(uint8_t regAdress, uint8_t bitPos) {
 /*          ACCEPTABLE VALUES: 2g, 4g, 8g, 16g ~ GET & SET          */
 void set_range(uint8_t val) {
   uint8_t _s;
-  read_reg(ADXL345_DATA_FORMAT);
+  read_data(ADXL345_DATA_FORMAT);
   while (!got_callback) {
     ;
     ;
@@ -186,7 +214,7 @@ void setTapThreshold(uint8_t tapThreshold) {
 // Return Value Between 0 and 255
 // Scale Factor is 62.5 mg/LSB
 uint8_t getTapThreshold() {
-  read_reg(ADXL345_THRESH_TAP);
+  read_data(ADXL345_THRESH_TAP);
   while (!got_callback) {
     ;
     ;
@@ -220,19 +248,19 @@ void setAxisOffset(int8_t x, int8_t y, int8_t z) {
 }
 
 void getAxisOffset(int8_t *x, int8_t *y, int8_t *z) {
-  read_reg(ADXL345_OFSX);
+  read_data(ADXL345_OFSX);
   while (!got_callback) {
     ;
     ;
   }
   *x = m_buffer[0];
-  read_reg(ADXL345_OFSY);
+  read_data(ADXL345_OFSY);
   while (!got_callback) {
     ;
     ;
   }
   *y = m_buffer[0];
-  read_reg(ADXL345_OFSZ);
+  read_data(ADXL345_OFSZ);
   while (!got_callback) {
     ;
     ;
@@ -252,7 +280,7 @@ void setTapDuration(uint8_t tapDuration) {
 }
 
 uint8_t getTapDuration() {
-  read_reg(ADXL345_DUR);
+  read_data(ADXL345_DUR);
   while (!got_callback) {
     ;
     ;
@@ -273,7 +301,7 @@ void setDoubleTapLatency(uint8_t doubleTapLatency) {
 }
 
 uint8_t getDoubleTapLatency() {
-  read_reg(ADXL345_LATENT);
+  read_data(ADXL345_LATENT);
   while (!got_callback) {
     ;
     ;
@@ -294,7 +322,7 @@ void setDoubleTapWindow(uint8_t doubleTapWindow) {
 }
 
 uint8_t getDoubleTapWindow() {
-  read_reg(ADXL345_WINDOW);
+  read_data(ADXL345_WINDOW);
   while (!got_callback) {
     ;
     ;
@@ -316,7 +344,7 @@ void setActivityThreshold(uint8_t activityThreshold) {
 
 // Gets the THRESH_ACT uint8_t
 uint8_t getActivityThreshold() {
-  read_reg(ADXL345_THRESH_ACT);
+  read_data(ADXL345_THRESH_ACT);
   while (!got_callback) {
     ;
     ;
@@ -337,7 +365,7 @@ void setInactivityThreshold(uint8_t inactivityThreshold) {
 }
 
 uint8_t getInactivityThreshold() {
-  read_reg(ADXL345_THRESH_INACT);
+  read_data(ADXL345_THRESH_INACT);
   while (!got_callback) {
     ;
     ;
@@ -358,7 +386,7 @@ void setTimeInactivity(uint8_t timeInactivity) {
 }
 
 uint8_t getTimeInactivity() {
-  read_reg(ADXL345_TIME_INACT);
+  read_data(ADXL345_TIME_INACT);
   while (!got_callback) {
     ;
     ;
@@ -379,7 +407,7 @@ void setFreeFallThreshold(uint8_t freeFallThreshold) {
 }
 
 uint8_t getFreeFallThreshold() {
-  read_reg(ADXL345_THRESH_FF);
+  read_data(ADXL345_THRESH_FF);
   while (!got_callback) {
     ;
     ;
@@ -399,7 +427,7 @@ void setFreeFallDuration(uint8_t freeFallDuration) {
 }
 
 uint8_t getFreeFallDuration() {
-  read_reg(ADXL345_TIME_FF);
+  read_data(ADXL345_TIME_FF);
   while (!got_callback) {
     ;
     ;
@@ -546,7 +574,7 @@ void setLowPower(bool state) {
 /*                                                                  */
 double getRate() {
   uint8_t _b;
-  read_reg(ADXL345_BW_RATE);
+  read_data(ADXL345_BW_RATE);
   while (!got_callback) {
     ;
     ;
@@ -563,7 +591,7 @@ void setRate(double rate) {
     r++;
   }
   if (r <= 9) {
-    read_reg(ADXL345_BW_RATE);
+    read_data(ADXL345_BW_RATE);
     while (!got_callback) {
       ;
       ;
@@ -586,7 +614,7 @@ void set_bw(uint8_t bw_code) {
 
 uint8_t get_bw_code() {
   uint8_t bw_code;
-  read_reg(ADXL345_BW_RATE);
+  read_data(ADXL345_BW_RATE);
   while (!got_callback) {
     ;
     ;
@@ -614,7 +642,7 @@ bool triggered(uint8_t interrupts, uint8_t mask) {
  */
 
 uint8_t getInterruptSourceByte() {
-  read_reg(ADXL345_INT_SOURCE);
+  read_data(ADXL345_INT_SOURCE);
   while (!got_callback) {
     ;
     ;
