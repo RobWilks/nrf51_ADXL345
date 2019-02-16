@@ -87,7 +87,7 @@ bool got_callback;
 
 // Buffer for data read from sensors.
 #define BUFFER_SIZE  11
-static uint8_t m_buffer[BUFFER_SIZE];
+uint8_t m_buffer[BUFFER_SIZE];
 
 // Data structures needed for averaging of data read from sensors.
 // [max 32, otherwise "int16_t" won't be sufficient to hold the sum
@@ -263,8 +263,9 @@ static void read_all(void)
     APP_ERROR_CHECK(app_twi_schedule(&m_app_twi, &transaction));
 }
 
-////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////// read_reg call back //////////////////////////////////////////
 // read_reg and call back
+// result of read is in m_buffer[]
 
 void read_reg_cb(ret_code_t result, void *p_user_data) {
   got_callback = true;
@@ -272,12 +273,10 @@ void read_reg_cb(ret_code_t result, void *p_user_data) {
     NRF_LOG_INFO("read_reg_cb - error: %d\r\n", (int)result);
     return;
   }
-
-  NRF_LOG_INFO("data_format: %d\n", m_buffer[0]);
 }
 
-////////////////////////////////////////////////////////////////////////////////
-static void read_reg(uint8_t address) {
+/////////////////////////////////////// read_reg /////////////////////////////////////////
+void read_reg(uint8_t address) {
   static uint8_t register_address;
   register_address = address;
   static app_twi_transfer_t const transfers[] =
@@ -310,7 +309,7 @@ void write_reg_cb(ret_code_t result, void *p_user_data) {
 ////////////////////////////////////// write_reg //////////////////////////////////////////
 // value to write is in config
 // uses twi_schedule
-static void write_reg(uint8_t address, uint8_t val) {
+void write_reg(uint8_t address, uint8_t val) {
 
   static uint8_t config[2];
   config[0] = address;
@@ -339,7 +338,7 @@ static void write_reg(uint8_t address, uint8_t val) {
 ////////////////////////////////////// write_reg2 //////////////////////////////////////////
 // value to write is in config
 // uses twi_perform
-static void write_reg2(uint8_t address, uint8_t val) {
+void write_reg2(uint8_t address, uint8_t val) {
 
   static uint8_t config[2];
   config[0] = address;
@@ -353,58 +352,6 @@ static void write_reg2(uint8_t address, uint8_t val) {
   APP_ERROR_CHECK(app_twi_perform(&m_app_twi, write_adxl345_data_format,
       1, NULL));
 }
-
-////////////////////////////////////// setRegisterBit //////////////////////////////////////////
-static void setRegisterBit(uint8_t regAdress, uint8_t bitPos, bool state) {
-  read_reg(regAdress);
-  if (state) {
-    m_buffer[0] |= (1 << bitPos); // Forces nth Bit of _b to 1. Other Bits Unchanged.
-  } else {
-    m_buffer[0] &= ~(1 << bitPos); // Forces nth Bit of _b to 0. Other Bits Unchanged.
-  }
-  write_reg2(regAdress, m_buffer[0]);
-}
-////////////////////////////////////// getRegisterBit //////////////////////////////////////////
-
-static bool getRegisterBit(uint8_t regAdress, uint8_t bitPos) {
-  read_reg(regAdress);
-  return ((m_buffer[0] >> bitPos) & 1);
-}
-
-/*************************** SET RANGE **************************/
-/*          ACCEPTABLE VALUES: 2g, 4g, 8g, 16g ~ GET & SET          */
-static void set_range(uint8_t _s) {
-
-  read_reg(ADXL345_DATA_FORMAT);
-  while (!got_callback) {
-    ;
-    ;
-  }
-
-  switch (8) {
-  case 2:
-    _s = 0b00000000;
-    break;
-  case 4:
-    _s = 0b00000001;
-    break;
-  case 8:
-    _s = 0b00000010;
-    break;
-  case 16:
-    _s = 0b00000011;
-    break;
-  default:
-    _s = 0b00000000;
-  }
-
-  _s |= (m_buffer[0] & 0b11101100);
-
-  write_reg2(ADXL345_DATA_FORMAT, _s);
-}
-////////////////////////////////////////////////////////////////////////////////
-// read_reg and call back
-// result of read is in m_buffer[]
 
 static void read_lm75b_registers_cb(ret_code_t result, void * p_user_data)
 {
@@ -641,22 +588,30 @@ int main(void)
 
     /*************************** PRINT REG VALUES **************************/
 
-    for (uint8_t i = 0x30; i < 0x38; i++) {
+    for (uint8_t i = 0x2f; i < 0x38; i++) {
       read_reg(i);
-      while (!got_callback) {;;}
-      NRF_LOG_FLUSH();
+      while (!got_callback) {
+        ;
+        ;
+      }
+      NRF_LOG_INFO("data_format: %d\n", m_buffer[0]);
     }
-    set_range(8);
+    NRF_LOG_FLUSH();
 
+    nrf_delay_ms(1000); // to flush log
+
+    set_range(4);
 
     //*************************** CHECK **************************/
 
     read_reg(ADXL345_DATA_FORMAT);
-    NRF_LOG_INFO("data_format:  bit0 %d\n",getRegisterBit(ADXL345_DATA_FORMAT, 0));
+    NRF_LOG_INFO("data_format: bit0 %d\n",getRegisterBit(ADXL345_DATA_FORMAT, 0));
     NRF_LOG_INFO("bit1 %d\n",getRegisterBit(ADXL345_DATA_FORMAT, 1));
     NRF_LOG_FLUSH();
-    setRegisterBit(ADXL345_INT_MAP, 6, true);
-    NRF_LOG_INFO("INT_map:  bit6 %d\n",getRegisterBit(ADXL345_INT_MAP, 6));
+
+
+    setRegisterBit(ADXL345_INT_MAP, 6, 1);
+    NRF_LOG_INFO("INT_map: bit6 %d\n",getRegisterBit(ADXL345_INT_MAP, 6));
 
 
 
