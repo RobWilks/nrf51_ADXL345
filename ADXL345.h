@@ -165,12 +165,105 @@ extern void read_reg(uint8_t address);
 extern void write_reg(uint8_t address, uint8_t val);
 extern void write_reg2(uint8_t address, uint8_t val);
 
+void powerOn();
+void readAccelXYZ(int16_t *xyx);
+void readAccel(int16_t *x, int16_t *y, int16_t *z);
+void get_Gxyz(double *xyz);
+
+void setTapThreshold(uint8_t tapThreshold);
+uint8_t getTapThreshold();
+void setAxisGains(double *_gains);
+void getAxisGains(double *_gains);
+void setAxisOffset(int8_t x, int8_t y, int8_t z);
+void getAxisOffset(int8_t *x, int8_t *y, int8_t *z);
+void setTapDuration(uint8_t tapDuration);
+uint8_t getTapDuration();
+void setDoubleTapLatency(uint8_t doubleTapLatency);
+uint8_t getDoubleTapLatency();
+void setDoubleTapWindow(uint8_t doubleTapWindow);
+uint8_t getDoubleTapWindow();
+void setActivityThreshold(uint8_t activityThreshold);
+uint8_t getActivityThreshold();
+void setInactivityThreshold(uint8_t inactivityThreshold);
+uint8_t getInactivityThreshold();
+void setTimeInactivity(uint8_t timeInactivity);
+uint8_t getTimeInactivity();
+void setFreeFallThreshold(uint8_t freeFallthreshold);
+uint8_t getFreeFallThreshold();
+void setFreeFallDuration(uint8_t freeFallDuration);
+uint8_t getFreeFallDuration();
+
+bool isActivityXEnabled();
+bool isActivityYEnabled();
+bool isActivityZEnabled();
+bool isInactivityXEnabled();
+bool isInactivityYEnabled();
+bool isInactivityZEnabled();
+bool isActivityAc();
+bool isInactivityAc();
+void setActivityAc(bool state);
+void setInactivityAc(bool state);
+
+bool getSuppressBit();
+void setSuppressBit(bool state);
+bool isTapDetectionOnX();
+void setTapDetectionOnX(bool state);
+bool isTapDetectionOnY();
+void setTapDetectionOnY(bool state);
+bool isTapDetectionOnZ();
+void setTapDetectionOnZ(bool state);
+void setTapDetectionOnXYZ(bool stateX, bool stateY, bool stateZ);
+
+void setActivityX(bool state);
+void setActivityY(bool state);
+void setActivityZ(bool state);
+void setActivityXYZ(bool stateX, bool stateY, bool stateZ);
+void setInactivityX(bool state);
+void setInactivityY(bool state);
+void setInactivityZ(bool state);
+void setInactivityXYZ(bool stateX, bool stateY, bool stateZ);
+
+bool isActivitySourceOnX();
+bool isActivitySourceOnY();
+bool isActivitySourceOnZ();
+bool isTapSourceOnX();
+bool isTapSourceOnY();
+bool isTapSourceOnZ();
+bool isAsleep();
+
+bool isLowPower();
+void setLowPower(bool state);
+double getRate();
+void setRate(double rate);
+void set_bw(uint8_t bw_code);
+uint8_t get_bw_code();
+
+bool triggered(uint8_t interrupts, uint8_t mask);
+
+uint8_t getInterruptSourceByte();
+bool getInterruptSource(uint8_t interruptBit);
+bool getInterruptMapping(uint8_t interruptBit);
+void setInterruptMapping(uint8_t interruptBit, bool interruptPin);
+bool isInterruptEnabled(uint8_t interruptBit);
+void setInterrupt(uint8_t interruptBit, bool state);
+void setImportantInterruptMapping(uint8_t single_tap, uint8_t double_tap, uint8_t free_fall, uint8_t activity, uint8_t inactivity);
+void InactivityINT(bool status);
+void ActivityINT(bool status);
+void FreeFallINT(bool status);
+void doubleTapINT(bool status);
+void singleTapINT(bool status);
+
+void set_range(uint8_t val);
+bool getSelfTestBit();
+void setSelfTestBit(bool selfTestBit);
+bool getInterruptLevelBit();
+void setInterruptLevelBit(bool interruptLevelBit);
+bool getFullResBit();
+void setFullResBit(bool fullResBit);
+bool getJustifyBit();
+void setJustifyBit(bool justifyBit);
 
 void setRegisterBit(uint8_t regAdress, uint8_t bitPos, bool state);
 bool getRegisterBit(uint8_t regAdress, uint8_t bitPos);
-void set_range(uint8_t val);
-
-
-
 
 #endif // ADXL345_H__

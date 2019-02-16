@@ -182,7 +182,7 @@ void setTapThreshold(uint8_t tapThreshold) {
 
 // Return Value Between 0 and 255
 // Scale Factor is 62.5 mg/LSB
-int getTapThreshold() {
+uint8_t getTapThreshold() {
 	read_reg(ADXL345_THRESH_TAP);
 while (!got_callback) {;;}  
 	return m_buffer[0];
@@ -273,7 +273,7 @@ while (!got_callback) {;;}
 /*                           ~ SET & GET                            */
 // Contains an Unsigned Time Value Representing the Amount of Time 
 //  After the Expiration of the Latency Time (determined by Latent register)
-//  During which a Second Valid Tape can Begin. 
+//  During which a Second Valid Tap can Begin. 
 // Scale Factor is 1.25ms/LSB. 
 // Value of 0 Disables the Double Tap Function. 
 // It Accepts a Maximum Value of 255.
@@ -300,7 +300,7 @@ void setActivityThreshold(uint8_t activityThreshold) {
 }
 
 // Gets the THRESH_ACT uint8_t
-int getActivityThreshold() {
+uint8_t getActivityThreshold() {
 	read_reg(ADXL345_THRESH_ACT);
 while (!got_callback) {;;}  
 	return m_buffer[0];
@@ -318,7 +318,7 @@ void setInactivityThreshold(uint8_t inactivityThreshold) {
 	write_reg2(ADXL345_THRESH_INACT, inactivityThreshold);  
 }
 
-int getInactivityThreshold() {
+uint8_t getInactivityThreshold() {
 	read_reg(ADXL345_THRESH_INACT);
 while (!got_callback) {;;}  
 	return m_buffer[0];
@@ -336,7 +336,7 @@ void setTimeInactivity(uint8_t timeInactivity) {
 	write_reg2(ADXL345_TIME_INACT, timeInactivity);  
 }
 
-int getTimeInactivity() {
+uint8_t getTimeInactivity() {
 	read_reg(ADXL345_TIME_INACT);
 while (!got_callback) {;;}  
 	return m_buffer[0];
@@ -354,7 +354,7 @@ void setFreeFallThreshold(uint8_t freeFallThreshold) {
 	write_reg2(ADXL345_THRESH_FF, freeFallThreshold);  
 }
 
-int getFreeFallThreshold() {
+uint8_t getFreeFallThreshold() {
 	read_reg(ADXL345_THRESH_FF);
 while (!got_callback) {;;}  
 	return m_buffer[0];
@@ -371,9 +371,311 @@ void setFreeFallDuration(uint8_t freeFallDuration) {
 		write_reg2(ADXL345_TIME_FF, freeFallDuration);  
 }
 
-int getFreeFallDuration() {
-	uint8_t _b;
+uint8_t getFreeFallDuration() {
 	read_reg(ADXL345_TIME_FF);
 while (!got_callback) {;;}  
 	return m_buffer[0];
 }
+
+/************************** ACTIVITY BITS ***************************/
+/*                                                                  */
+bool isActivityXEnabled() {  
+	return getRegisterBit(ADXL345_ACT_INACT_CTL, 6); 
+}
+bool isActivityYEnabled() {  
+	return getRegisterBit(ADXL345_ACT_INACT_CTL, 5); 
+}
+bool isActivityZEnabled() {  
+	return getRegisterBit(ADXL345_ACT_INACT_CTL, 4); 
+}
+bool isInactivityXEnabled() {  
+	return getRegisterBit(ADXL345_ACT_INACT_CTL, 2); 
+}
+bool isInactivityYEnabled() {  
+	return getRegisterBit(ADXL345_ACT_INACT_CTL, 1); 
+}
+bool isInactivityZEnabled() {  
+	return getRegisterBit(ADXL345_ACT_INACT_CTL, 0); 
+}
+
+void setActivityX(bool state) {  
+	setRegisterBit(ADXL345_ACT_INACT_CTL, 6, state); 
+}
+void setActivityY(bool state) {  
+	setRegisterBit(ADXL345_ACT_INACT_CTL, 5, state); 
+}
+void setActivityZ(bool state) {  
+	setRegisterBit(ADXL345_ACT_INACT_CTL, 4, state); 
+}
+void setActivityXYZ(bool stateX, bool stateY, bool stateZ) {
+	setActivityX(stateX);
+	setActivityY(stateY);
+	setActivityZ(stateZ);
+}
+void setInactivityX(bool state) {  
+	setRegisterBit(ADXL345_ACT_INACT_CTL, 2, state); 
+}
+void setInactivityY(bool state) {  
+	setRegisterBit(ADXL345_ACT_INACT_CTL, 1, state); 
+}
+void setInactivityZ(bool state) {  
+	setRegisterBit(ADXL345_ACT_INACT_CTL, 0, state); 
+}
+void setInactivityXYZ(bool stateX, bool stateY, bool stateZ) {
+	setInactivityX(stateX);
+	setInactivityY(stateY);
+	setInactivityZ(stateZ);
+}
+
+bool isActivityAc() { 
+	return getRegisterBit(ADXL345_ACT_INACT_CTL, 7); 
+}
+bool isInactivityAc(){ 
+	return getRegisterBit(ADXL345_ACT_INACT_CTL, 3); 
+}
+
+void setActivityAc(bool state) {  
+	setRegisterBit(ADXL345_ACT_INACT_CTL, 7, state); 
+}
+void setInactivityAc(bool state) {  
+	setRegisterBit(ADXL345_ACT_INACT_CTL, 3, state); 
+}
+
+/************************* SUPPRESS BITS ****************************/
+/*                                                                  */
+bool getSuppressBit(){ 
+	return getRegisterBit(ADXL345_TAP_AXES, 3); 
+}
+void setSuppressBit(bool state) {  
+	setRegisterBit(ADXL345_TAP_AXES, 3, state); 
+}
+
+/**************************** TAP BITS ******************************/
+/*                                                                  */
+bool isTapDetectionOnX(){ 
+	return getRegisterBit(ADXL345_TAP_AXES, 2); 
+}
+void setTapDetectionOnX(bool state) {  
+	setRegisterBit(ADXL345_TAP_AXES, 2, state); 
+}
+bool isTapDetectionOnY(){ 
+	return getRegisterBit(ADXL345_TAP_AXES, 1); 
+}
+void setTapDetectionOnY(bool state) {  
+	setRegisterBit(ADXL345_TAP_AXES, 1, state); 
+}
+bool isTapDetectionOnZ(){ 
+	return getRegisterBit(ADXL345_TAP_AXES, 0); 
+}
+void setTapDetectionOnZ(bool state) {  
+	setRegisterBit(ADXL345_TAP_AXES, 0, state); 
+}
+
+void setTapDetectionOnXYZ(bool stateX, bool stateY, bool stateZ) {
+	setTapDetectionOnX(stateX);
+	setTapDetectionOnY(stateY);
+	setTapDetectionOnZ(stateZ);
+}
+
+bool isActivitySourceOnX(){ 
+	return getRegisterBit(ADXL345_ACT_TAP_STATUS, 6); 
+}
+bool isActivitySourceOnY(){ 
+	return getRegisterBit(ADXL345_ACT_TAP_STATUS, 5); 
+}
+bool isActivitySourceOnZ(){ 
+	return getRegisterBit(ADXL345_ACT_TAP_STATUS, 4); 
+}
+
+bool isTapSourceOnX(){ 
+	return getRegisterBit(ADXL345_ACT_TAP_STATUS, 2); 
+}
+bool isTapSourceOnY(){ 
+	return getRegisterBit(ADXL345_ACT_TAP_STATUS, 1); 
+}
+bool isTapSourceOnZ(){ 
+	return getRegisterBit(ADXL345_ACT_TAP_STATUS, 0); 
+}
+
+/*************************** ASLEEP BIT *****************************/
+/*                                                                  */
+bool isAsleep(){ 
+	return getRegisterBit(ADXL345_ACT_TAP_STATUS, 3); 
+}
+
+/************************** LOW POWER BIT ***************************/
+/*                                                                  */
+bool isLowPower(){ 
+	return getRegisterBit(ADXL345_BW_RATE, 4); 
+}
+void setLowPower(bool state) {  
+	setRegisterBit(ADXL345_BW_RATE, 4, state); 
+}
+
+/*************************** RATE BITS ******************************/
+/*                                                                  */
+double getRate(){
+	uint8_t _b;
+	read_reg(ADXL345_BW_RATE, 1);
+while (!got_callback) {;;}  
+	_b = m_buffer[0] & 0b00001111;
+	return (pow(2,((int) _b)-6)) * 6.25;
+}
+
+void setRate(double rate){
+	uint8_t _s;
+	int v = (int) (rate / 6.25);
+	int r = 0;
+	while (v >>= 1)
+	{
+		r++;
+	}
+	if (r <= 9) { 
+		read_reg(ADXL345_BW_RATE, 1);
+while (!got_callback) {;;}  
+		_s = (uint8_t) (r + 6) | (m_buffer[0] & 0b11110000);
+		writeToI2C(ADXL345_BW_RATE, _s);
+	}
+}
+
+/*************************** BANDWIDTH ******************************/
+/*                          ~ SET & GET                             */
+void set_bw(uint8_t bw_code){
+	if((bw_code < ADXL345_BW_0_05) || (bw_code > ADXL345_BW_1600)){
+		status = false;
+		error_code = ADXL345_BAD_ARG;
+	}
+	else{
+		writeToI2C(ADXL345_BW_RATE, bw_code);
+	}
+}
+
+uint8_t get_bw_code(){
+	uint8_t bw_code;
+	read_reg(ADXL345_BW_RATE, 1);
+while (!got_callback) {;;}  
+	return m_buffer[0];
+}
+
+
+
+
+/************************* TRIGGER CHECK  ***************************/
+/*                                                                  */
+// Check if Action was Triggered in Interrupts
+// Example triggered(interrupts, ADXL345_SINGLE_TAP);
+bool triggered(uint8_t interrupts, int mask){
+	return ((interrupts >> mask) & 1);
+}
+
+/*
+ ADXL345_DATA_READY
+ ADXL345_SINGLE_TAP
+ ADXL345_DOUBLE_TAP
+ ADXL345_ACTIVITY
+ ADXL345_INACTIVITY
+ ADXL345_FREE_FALL
+ ADXL345_WATERMARK
+ ADXL345_OVERRUNY
+ */
+
+
+uint8_t getInterruptSourceByte() {
+	read_reg(ADXL345_INT_SOURCE, 1);
+while (!got_callback) {;;}  
+	return m_buffer[0];
+}
+
+bool getInterruptSource(uint8_t interruptBit) {
+	return getRegisterBit(ADXL345_INT_SOURCE,interruptBit);
+}
+
+bool getInterruptMapping(uint8_t interruptBit) {
+	return getRegisterBit(ADXL345_INT_MAP,interruptBit);
+}
+
+/*********************** INTERRUPT MAPPING **************************/
+/*         Set the Mapping of an Interrupt to pin1 or pin2          */
+// eg: setInterruptMapping(ADXL345_INT_DOUBLE_TAP_BIT,ADXL345_INT2_PIN);
+void setInterruptMapping(uint8_t interruptBit, bool interruptPin) {
+	setRegisterBit(ADXL345_INT_MAP, interruptBit, interruptPin);
+}
+
+void setImportantInterruptMapping(int single_tap, int double_tap, int free_fall, int activity, int inactivity) {
+	if(single_tap == 1) {
+		setInterruptMapping( ADXL345_INT_SINGLE_TAP_BIT,   ADXL345_INT1_PIN );}
+	else if(single_tap == 2) {
+		setInterruptMapping( ADXL345_INT_SINGLE_TAP_BIT,   ADXL345_INT2_PIN );}
+
+	if(double_tap == 1) {
+		setInterruptMapping( ADXL345_INT_DOUBLE_TAP_BIT,   ADXL345_INT1_PIN );}
+	else if(double_tap == 2) {
+		setInterruptMapping( ADXL345_INT_DOUBLE_TAP_BIT,   ADXL345_INT2_PIN );}
+
+	if(free_fall == 1) {
+		setInterruptMapping( ADXL345_INT_FREE_FALL_BIT,   ADXL345_INT1_PIN );}
+	else if(free_fall == 2) {
+		setInterruptMapping( ADXL345_INT_FREE_FALL_BIT,   ADXL345_INT2_PIN );}
+
+	if(activity == 1) {
+		setInterruptMapping( ADXL345_INT_ACTIVITY_BIT,   ADXL345_INT1_PIN );}
+	else if(activity == 2) {
+		setInterruptMapping( ADXL345_INT_ACTIVITY_BIT,   ADXL345_INT2_PIN );}
+
+	if(inactivity == 1) {
+		setInterruptMapping( ADXL345_INT_INACTIVITY_BIT,   ADXL345_INT1_PIN );}
+	else if(inactivity == 2) {
+		setInterruptMapping( ADXL345_INT_INACTIVITY_BIT,   ADXL345_INT2_PIN );}
+}
+
+bool isInterruptEnabled(uint8_t interruptBit) {
+	return getRegisterBit(ADXL345_INT_ENABLE,interruptBit);
+}
+
+void setInterrupt(uint8_t interruptBit, bool state) {
+	setRegisterBit(ADXL345_INT_ENABLE, interruptBit, state);
+}
+
+void singleTapINT(bool status) {
+	if(status) {
+		setInterrupt( ADXL345_INT_SINGLE_TAP_BIT, 1);
+	}
+	else {
+		setInterrupt( ADXL345_INT_SINGLE_TAP_BIT, 0);
+	}
+}
+void doubleTapINT(bool status) {
+	if(status) {
+		setInterrupt( ADXL345_INT_DOUBLE_TAP_BIT, 1);
+	}
+	else {
+		setInterrupt( ADXL345_INT_DOUBLE_TAP_BIT, 0);		
+	}	
+}
+void FreeFallINT(bool status) {
+	if(status) {
+		setInterrupt( ADXL345_INT_FREE_FALL_BIT,  1);
+	}
+	else {
+		setInterrupt( ADXL345_INT_FREE_FALL_BIT,  0);
+	}	
+}
+void ActivityINT(bool status) {
+	if(status) {
+		setInterrupt( ADXL345_INT_ACTIVITY_BIT,   1);
+	}
+	else {
+		setInterrupt( ADXL345_INT_ACTIVITY_BIT,   0);
+	}
+}
+void InactivityINT(bool status) {
+	if(status) {
+		setInterrupt( ADXL345_INT_INACTIVITY_BIT, 1);
+	}
+	else {
+		setInterrupt( ADXL345_INT_INACTIVITY_BIT, 0);
+	}
+}
+
+
+
