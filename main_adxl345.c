@@ -71,6 +71,7 @@
 #define APP_TIMER_PRESCALER         0
 #define APP_TIMER_OP_QUEUE_SIZE     2
 
+
 // Pin number for indicating communication with sensors.
 #ifdef BSP_LED_3
     #define READ_ALL_INDICATOR  BSP_BOARD_LED_3
@@ -605,14 +606,31 @@ int main(void)
     //*************************** CHECK **************************/
 
     read_reg(ADXL345_DATA_FORMAT);
-    NRF_LOG_INFO("data_format: bit0 %d\n",getRegisterBit(ADXL345_DATA_FORMAT, 0));
-    NRF_LOG_INFO("bit1 %d\n",getRegisterBit(ADXL345_DATA_FORMAT, 1));
+    NRF_LOG_INFO("data_format: bit0 = %d\n", getRegisterBit(ADXL345_DATA_FORMAT, 0));
+    NRF_LOG_INFO("bit1 = %d\n", getRegisterBit(ADXL345_DATA_FORMAT, 1));
     NRF_LOG_FLUSH();
 
-
     setRegisterBit(ADXL345_INT_MAP, 6, 1);
-    NRF_LOG_INFO("INT_map: bit6 %d\n",getRegisterBit(ADXL345_INT_MAP, 6));
+    NRF_LOG_INFO("INT_map: bit6 = %d\n", getRegisterBit(ADXL345_INT_MAP, 6));
 
+    setTapThreshold(50);     // 62.5 mg per increment
+    setTapDuration(15);      // 625 µs per increment
+    setDoubleTapLatency(80); // 1.25 ms per increment
+    setDoubleTapWindow(200); // 1.25 ms per increment
+    NRF_LOG_INFO("Double Tap Window = %d\n", getDoubleTapWindow());
+    NRF_LOG_INFO("TapDuration = %d\n", getTapDuration());
+
+    setActivityXYZ(1, 0, 0);  // Set to activate movement detection in the axes "setActivityXYZ(X, Y, Z);" (1 == ON, 0 == OFF)
+    setActivityThreshold(75); // 62.5mg per increment   // Set activity   // Inactivity thresholds (0-255)
+
+    setInactivityXYZ(1, 0, 0);  // Set to detect inactivity in all the axes "setInactivityXYZ(X, Y, Z);" (1 == ON, 0 == OFF)
+    setInactivityThreshold(75); // 62.5mg per increment   // Set inactivity // Inactivity thresholds (0-255)
+    setTimeInactivity(10);      // How many seconds of no activity is inactive?
+
+    NRF_LOG_INFO("isActivityXEnabled = %d\n", isActivityXEnabled());
+    NRF_LOG_INFO("isActivityYEnabled = %d\n", isActivityYEnabled());
+
+    NRF_LOG_INFO("isInActivityXEnabled = %d\n", isInactivityXEnabled());
 
 
     rtc_config();
