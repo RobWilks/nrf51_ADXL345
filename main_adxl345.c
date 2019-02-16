@@ -354,11 +354,27 @@ static void write_reg2(uint8_t address, uint8_t val) {
       1, NULL));
 }
 
+////////////////////////////////////// setRegisterBit //////////////////////////////////////////
+static void setRegisterBit(uint8_t regAdress, uint8_t bitPos, bool state) {
+  read_reg(regAdress);
+  if (state) {
+    m_buffer[0] |= (1 << bitPos); // Forces nth Bit of _b to 1. Other Bits Unchanged.
+  } else {
+    m_buffer[0] &= ~(1 << bitPos); // Forces nth Bit of _b to 0. Other Bits Unchanged.
+  }
+  write_reg2(regAdress, m_buffer[0]);
+}
+////////////////////////////////////// getRegisterBit //////////////////////////////////////////
+
+static bool getRegisterBit(uint8_t regAdress, uint8_t bitPos) {
+  read_reg(regAdress);
+  return ((m_buffer[0] >> bitPos) & 1);
+}
+
 /*************************** SET RANGE **************************/
 /*          ACCEPTABLE VALUES: 2g, 4g, 8g, 16g ~ GET & SET          */
 static void set_range(uint8_t _s) {
 
-  reg_addr = ADXL345_DATA_FORMAT;
   read_reg(ADXL345_DATA_FORMAT);
   while (!got_callback) {
     ;
@@ -615,30 +631,32 @@ int main(void)
     APP_ERROR_CHECK(app_twi_perform(&m_app_twi, mma7660_init_transfers,
         MMA7660_INIT_TRANSFER_COUNT, NULL));
 
-    rjw initialisation of ADX345 proceeds differently
-
     */
+
+
+//    rjw initialisation of ADX345 
 
     APP_ERROR_CHECK(app_twi_perform(&m_app_twi, adxl345_init_transfers,
         ADXL345_INIT_TRANSFER_COUNT, NULL));
 
-    /*************************** GET DATA FORMAT **************************/
+    /*************************** PRINT REG VALUES **************************/
 
     for (uint8_t i = 0x30; i < 0x38; i++) {
-      reg_addr = i;
       read_reg(i);
       while (!got_callback) {;;}
       NRF_LOG_FLUSH();
     }
-    set_range(4);
+    set_range(8);
 
 
     //*************************** CHECK **************************/
 
-    reg_addr = ADXL345_DATA_FORMAT;
     read_reg(ADXL345_DATA_FORMAT);
+    NRF_LOG_INFO("data_format:  bit0 %d\n",getRegisterBit(ADXL345_DATA_FORMAT, 0));
+    NRF_LOG_INFO("bit1 %d\n",getRegisterBit(ADXL345_DATA_FORMAT, 1));
     NRF_LOG_FLUSH();
-
+    setRegisterBit(ADXL345_INT_MAP, 6, true);
+    NRF_LOG_INFO("INT_map:  bit6 %d\n",getRegisterBit(ADXL345_INT_MAP, 6));
 
 
 
