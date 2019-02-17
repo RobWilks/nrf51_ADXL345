@@ -47,16 +47,20 @@
  * This file contains the source code for a sample application using TWI.
  */
 
+#include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include "boards.h"
 #include "app_util_platform.h"
-#include "nrf_drv_rtc.h"
-#include "nrf_drv_clock.h"
-#include "nrf_delay.h"
-#include "bsp.h"
+#include "app_uart.h"
 #include "app_error.h"
 #include "app_timer.h"
 #include "app_twi.h"
+#include "nrf_drv_rtc.h"
+#include "nrf_drv_clock.h"
+#include "nrf_delay.h"
+#include "nrf.h"
+#include "bsp.h"
 #include "lm75b.h"
 #include "mma7660.h"
 #include "ADXL345.h"
@@ -64,7 +68,8 @@
 #define NRF_LOG_MODULE_NAME "APP"
 #include "nrf_log.h"
 #include "nrf_log_ctrl.h"
-
+#include <stdarg.h>//rjw
+#include <__vfprintf.h>//rjw
 
 #define MAX_PENDING_TRANSACTIONS    5
 
@@ -79,12 +84,18 @@
     #error "Please choose an output pin"
 #endif
 
+#define MAX_TEST_DATA_BYTES     (15U)                /**< max number of test bytes to be used for tx and rx. */
+#define UART_TX_BUF_SIZE 256                         /**< UART TX buffer size. */
+#define UART_RX_BUF_SIZE 256                         /**< UART RX buffer size. */
 
 static app_twi_t m_app_twi = APP_TWI_INSTANCE(0);
 
 static nrf_drv_rtc_t const m_rtc = NRF_DRV_RTC_INSTANCE(0);
 
 bool got_callback;
+
+extern int16_t xyz_int[3];
+extern double xyz[3];
 
 // Buffer for data read from sensors.
 #define BUFFER_SIZE  11
@@ -144,7 +155,7 @@ static uint8_t m_prev_tilt = 0;
             axis = MMA7660_GET_ACC(reg_data); \
         } \
     } while (0)
-/*
+    /*
 void read_all_cb(ret_code_t result, void * p_user_data)
 {
     if (result != NRF_SUCCESS)
@@ -215,30 +226,59 @@ void read_all_cb(ret_code_t result, void * p_user_data)
     }
 }
 */
+////////////////////////////////////// uart_printf //////////////////////////////////////////
 
-void read_all_cb(ret_code_t result, void * p_user_data)
+void uart_printf(const char *fmt, ...)
 {
-    if (result != NRF_SUCCESS)
+    char buf[200], *p;
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, ap);
+    for (p = buf; *p; ++p)
+    app_uart_put(*p);
+    va_end(ap);
+ }
+
+
+
+
+////////////////////////////////////// uart_error_handle //////////////////////////////////////////
+
+
+void uart_error_handle(app_uart_evt_t * p_event)
+{
+    if (p_event->evt_type == APP_UART_COMMUNICATION_ERROR)
     {
-        NRF_LOG_INFO("read_all_cb - error: %d\r\n", (int)result);
-        return;
+        APP_ERROR_HANDLER(p_event->data.error_communication);
     }
-
-
-  int x_out = (((int)m_buffer[3]) << 8) | m_buffer[2];
-  int y_out = (((int)m_buffer[5]) << 8) | m_buffer[4];
-  int z_out = (((int)m_buffer[7]) << 8) | m_buffer[6];
-
-        NRF_LOG_INFO("X: %d, Y: %d, Z: %d\n",
-            x_out,
-            y_out,
-            z_out);
-    
+    else if (p_event->evt_type == APP_UART_FIFO_ERROR)
+    {
+        APP_ERROR_HANDLER(p_event->data.error_code);
+    }
 }
 
+////////////////////////////////////// read_all call back //////////////////////////////////////////
 
 
-static void read_all(void)
+void read_all_cb(ret_code_t result, void *p_user_data) {
+
+  if (result != NRF_SUCCESS) {
+    uart_printf("read_all_cb - error: %d\r\n", (int)result);
+    return;
+  }
+
+  int x_out = (((int)m_buffer[1]) << 8) | m_buffer[0];
+  int y_out = (((int)m_buffer[3]) << 8) | m_buffer[2];
+  int z_out = (((int)m_buffer[5]) << 8) | m_buffer[4];
+
+  uart_printf("X: %d, Y: %d, Z: %d\n",
+      x_out,
+      y_out,
+      z_out);
+}
+////////////////////////////////////// read_all //////////////////////////////////////////
+
+void read_all(void)
 {
     // Signal on LED that something is going on.
     bsp_board_led_invert(READ_ALL_INDICATOR);
@@ -251,7 +291,7 @@ static void read_all(void)
 //        LM75B_READ_TEMP(&m_buffer[0])
 //        ,
 //        MMA7660_READ_XYZ_AND_TILT(&m_buffer[2])
-        ADXL345_READ_XYZ_AND_TILT(&m_buffer[2])
+        ADXL345_READ_XYZ_AND_TILT(&m_buffer[0])
     };
     static app_twi_transaction_t const transaction =
     {
@@ -271,7 +311,7 @@ static void read_all(void)
 void read_data_cb(ret_code_t result, void *p_user_data) {
   got_callback = true;
   if (result != NRF_SUCCESS) {
-    NRF_LOG_INFO("read_data_cb - error: %d\r\n", (int)result);
+    uart_printf("read_data_cb - error: %d\r\n", (int)result);
     return;
   }
 }
@@ -300,10 +340,29 @@ void read_data(uint8_t address) {
 // result of read is in m_buffer[]
 
 void read_xyz_data_cb(ret_code_t result, void *p_user_data) {
-  got_callback = true;
   if (result != NRF_SUCCESS) {
-    NRF_LOG_INFO("read_data_cb - error: %d\r\n", (int)result);
+    uart_printf("read_data_cb - error: %d\r\n", (int)result);
+    return;
   }
+  // Each Axis @ All g Ranges: 10 Bit Resolution (2 Bytes)
+
+  xyz_int[0] = (((int)m_buffer[1]) << 8) | m_buffer[0];
+  xyz_int[1] = (((int)m_buffer[3]) << 8) | m_buffer[2];
+  xyz_int[2] = (((int)m_buffer[5]) << 8) | m_buffer[4];
+
+  get_Gxyz();
+
+  for (int i = 0; i < 3; i++) {
+
+    uart_printf("%i = : %i  ", i, xyz_int[i]);
+  }
+  uart_printf("\n");
+
+
+  for (int i = 0; i < 3; i++) {
+    uart_printf("%i = : %d.%d  ", i, NRF_LOG_FLOAT(xyz[i]));
+  }
+  uart_printf("\n");
 }
 /////////////////////////////////////// read_xyz_data /////////////////////////////////////////
 void read_xyz_data(uint8_t address) {
@@ -320,7 +379,8 @@ void read_xyz_data(uint8_t address) {
   static app_twi_transfer_t const transfers[] =
       {
           ADXL345_READ(&register_address, m_buffer, ADXL345_TO_READ)
-
+//         ADXL345_READ_XYZ_AND_TILT(&m_buffer[0])
+         
       };
   static app_twi_transaction_t const transaction =
       {
@@ -328,7 +388,6 @@ void read_xyz_data(uint8_t address) {
           .p_user_data = NULL,
           .p_transfers = transfers,
           .number_of_transfers = sizeof(transfers) / sizeof(transfers[0])};
-  got_callback = false;
 
   APP_ERROR_CHECK(app_twi_schedule(&m_app_twi, &transaction));
 }
@@ -337,11 +396,11 @@ void read_xyz_data(uint8_t address) {
 
 void write_reg_cb(ret_code_t result, void *p_user_data) {
   if (result != NRF_SUCCESS) {
-    NRF_LOG_INFO("read_data_cb - error: %d\r\n", (int)result);
+    uart_printf("read_data_cb - error: %d\r\n", (int)result);
     return;
   }
 
-  NRF_LOG_INFO("data written\n");
+  uart_printf("data written\n");
 }
 
 ////////////////////////////////////// write_reg //////////////////////////////////////////
@@ -395,11 +454,11 @@ static void read_lm75b_registers_cb(ret_code_t result, void * p_user_data)
 {
     if (result != NRF_SUCCESS)
     {
-        NRF_LOG_INFO("read_lm75b_registers_cb - error: %d\r\n", (int)result);
+        uart_printf("read_lm75b_registers_cb - error: %d\r\n", (int)result);
         return;
     }
 
-    NRF_LOG_INFO("LM75B:\r\n");
+    uart_printf("LM75B:\r\n");
     NRF_LOG_HEXDUMP_INFO(m_buffer, 7);
 }
 static void read_lm75b_registers(void)
@@ -433,11 +492,11 @@ static void read_mma7660_registers_cb(ret_code_t result, void * p_user_data)
 {
     if (result != NRF_SUCCESS)
     {
-        NRF_LOG_INFO("read_mma7660_registers_cb - error: %d\r\n", (int)result);
+        uart_printf("read_mma7660_registers_cb - error: %d\r\n", (int)result);
         return;
     }
 
-    NRF_LOG_INFO("MMA7660:\r\n");
+    uart_printf("MMA7660:\r\n");
     NRF_LOG_HEXDUMP_INFO(m_buffer, MMA7660_NUMBER_OF_REGISTERS);
 }
 static void read_mma7660_registers(void)
@@ -468,11 +527,11 @@ static void read_adxl345_registers_cb(ret_code_t result, void * p_user_data)
 {
     if (result != NRF_SUCCESS)
     {
-        NRF_LOG_INFO("read_adxl345_registers_cb - error: %d\r\n", (int)result);
+        uart_printf("read_adxl345_registers_cb - error: %d\r\n", (int)result);
         return;
     }
 
-    NRF_LOG_INFO("ADXL345:\r\n");
+    uart_printf("ADXL345:\r\n");
     NRF_LOG_HEXDUMP_INFO(m_buffer, ADXL345_NUMBER_OF_REGISTERS);
 }
 static void read_adxl345_registers(void)
@@ -548,21 +607,19 @@ static void twi_config(void)
     APP_ERROR_CHECK(err_code);
 }
 
-
 ////////////////////////////////////////////////////////////////////////////////
 // RTC tick events generation.
-static void rtc_handler(nrf_drv_rtc_int_type_t int_type)
-{
-    static uint8_t tick_count;
-    if (int_type == NRF_DRV_RTC_INT_TICK)
-    {
-        // On each RTC tick (their frequency is set in "nrf_drv_config.h")
-        // we read data from our sensors.
-        ++tick_count;
-        if ((tick_count % 16) == 0) readAccel(ADXL345_DATAX0);
+static void rtc_handler(nrf_drv_rtc_int_type_t int_type) {
+  static uint8_t tick_count;
+  if (int_type == NRF_DRV_RTC_INT_TICK) {
+    // On each RTC tick (their frequency is set in "nrf_drv_config.h")
+    // we read data from our sensors.
+    ++tick_count;
+    if ((tick_count % 16) == 0) {
+      read_xyz_data(ADXL345_DATAX0);
     }
+  }
 }
-
 
 ////////////////////////////////////////////////////////////////////////////////
 // Initialize RTC instance with default configuration.
@@ -598,7 +655,34 @@ static void lfclk_config(void)
 //
 int main(void)
 {
+    uint32_t err_code; // added for UART
+
     bsp_board_leds_init();
+
+
+    // Initialise UART
+
+        const app_uart_comm_params_t comm_params =
+      {
+          RX_PIN_NUMBER,
+          TX_PIN_NUMBER,
+          RTS_PIN_NUMBER,
+          CTS_PIN_NUMBER,
+          APP_UART_FLOW_CONTROL_ENABLED,
+          false,
+          UART_BAUDRATE_BAUDRATE_Baud115200
+      };
+
+    APP_UART_FIFO_INIT(&comm_params,
+                         UART_RX_BUF_SIZE,
+                         UART_TX_BUF_SIZE,
+                         uart_error_handle,
+                         APP_IRQ_PRIORITY_LOWEST,
+                         err_code);
+
+    APP_ERROR_CHECK(err_code);
+
+
 
     // Start internal LFCLK XTAL oscillator - it is needed by BSP to handle
     // buttons with the use of APP_TIMER and for "read_all" ticks generation
@@ -609,8 +693,7 @@ int main(void)
 
     APP_ERROR_CHECK(NRF_LOG_INIT(NULL));
 
-    NRF_LOG_INFO("TWI master example\r\n");
-    NRF_LOG_FLUSH();
+    uart_printf("TWI master example\r\n");
     twi_config();
 
     // Initialize sensors.
@@ -636,9 +719,8 @@ int main(void)
         ;
         ;
       }
-      NRF_LOG_INFO("data_format: %d\n", m_buffer[0]);
+      uart_printf("data_format: %d\n", m_buffer[0]);
     }
-    NRF_LOG_FLUSH();
 
     nrf_delay_ms(1000); // to flush log
 
@@ -647,19 +729,18 @@ int main(void)
     //*************************** CHECK **************************/
 
     read_data(ADXL345_DATA_FORMAT);
-    NRF_LOG_INFO("data_format: bit0 = %d\n", getRegisterBit(ADXL345_DATA_FORMAT, 0));
-    NRF_LOG_INFO("bit1 = %d\n", getRegisterBit(ADXL345_DATA_FORMAT, 1));
-    NRF_LOG_FLUSH();
-
+    uart_printf("data_format: bit0 = %d\n", getRegisterBit(ADXL345_DATA_FORMAT, 0));
+    uart_printf("bit1 = %d\n", getRegisterBit(ADXL345_DATA_FORMAT, 1));
+ 
     setRegisterBit(ADXL345_INT_MAP, 6, 1);
-    NRF_LOG_INFO("INT_map: bit6 = %d\n", getRegisterBit(ADXL345_INT_MAP, 6));
+    uart_printf("INT_map: bit6 = %d\n", getRegisterBit(ADXL345_INT_MAP, 6));
 
     setTapThreshold(50);     // 62.5 mg per increment
     setTapDuration(15);      // 625 µs per increment
     setDoubleTapLatency(80); // 1.25 ms per increment
     setDoubleTapWindow(200); // 1.25 ms per increment
-    NRF_LOG_INFO("Double Tap Window = %d\n", getDoubleTapWindow());
-    NRF_LOG_INFO("TapDuration = %d\n", getTapDuration());
+    uart_printf("Double Tap Window = %d\n", getDoubleTapWindow());
+    uart_printf("TapDuration = %d\n", getTapDuration());
 
     setActivityXYZ(1, 0, 0);  // Set to activate movement detection in the axes "setActivityXYZ(X, Y, Z);" (1 == ON, 0 == OFF)
     setActivityThreshold(75); // 62.5mg per increment   // Set activity   // Inactivity thresholds (0-255)
@@ -668,10 +749,10 @@ int main(void)
     setInactivityThreshold(75); // 62.5mg per increment   // Set inactivity // Inactivity thresholds (0-255)
     setTimeInactivity(10);      // How many seconds of no activity is inactive?
 
-    NRF_LOG_INFO("isActivityXEnabled = %d\n", isActivityXEnabled());
-    NRF_LOG_INFO("isActivityYEnabled = %d\n", isActivityYEnabled());
+    uart_printf("isActivityXEnabled = %d\n", isActivityXEnabled());
+    uart_printf("isActivityYEnabled = %d\n", isActivityYEnabled());
 
-    NRF_LOG_INFO("isInActivityXEnabled = %d\n", isInactivityXEnabled());
+    uart_printf("isInActivityXEnabled = %d\n", isInactivityXEnabled());
 
 
     rtc_config();
@@ -680,7 +761,6 @@ int main(void)
 
     while (true) {
       __WFI();
-      NRF_LOG_FLUSH();
     }
 }
 

@@ -163,6 +163,7 @@ extern uint8_t m_buffer[];
 extern bool got_callback;
 extern void read_data(uint8_t address);
 extern void read_xyz_data(uint8_t address);
+extern void read_all();
 extern void write_reg(uint8_t address, uint8_t val);
 extern void write_reg2(uint8_t address, uint8_t val);
 

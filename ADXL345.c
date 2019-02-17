@@ -63,16 +63,12 @@ bool adxl345_error_code = ADXL345_NO_ERROR;
 
 void readAccel(uint8_t address) {
   read_xyz_data(address); // Read Accel Data from ADXL345
-  while (!got_callback) {
-    ;
-    ;
-  }
+//  read_all(); // Read Accel Data from ADXL345
+//  while (!got_callback_xyz) {
+//    ;
+//    ;
+//  }
 
-  // Each Axis @ All g Ranges: 10 Bit Resolution (2 Bytes)
-
-  xyz_int[0] = (((int)m_buffer[3]) << 8) | m_buffer[2];
-  xyz_int[1] = (((int)m_buffer[5]) << 8) | m_buffer[4];
-  xyz_int[2] = (((int)m_buffer[7]) << 8) | m_buffer[6];
 }
 
 void get_Gxyz() {
