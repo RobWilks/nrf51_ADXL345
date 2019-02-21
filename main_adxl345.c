@@ -354,15 +354,17 @@ void read_xyz_data_cb(ret_code_t result, void *p_user_data) {
 
   for (int i = 0; i < 3; i++) {
 
-    uart_printf("%i = : %i  ", i, xyz_int[i]);
+    uart_printf("%6i = : %6i  ", i, xyz_int[i]);
   }
   uart_printf("\n");
 
 
-  for (int i = 0; i < 3; i++) {
-    uart_printf("%i = : %d.%d  ", i, NRF_LOG_FLOAT(xyz[i]));
-  }
-  uart_printf("\n");
+//  for (int i = 0; i < 3; i++) {
+//    uart_printf("%i = : %d.%d  ", i, NRF_LOG_FLOAT(xyz[i]));
+//    uart_printf("%i = : %8.3f  ", i,xyz[i]);
+//  }
+//  uart_printf("\n");
+
 }
 /////////////////////////////////////// read_xyz_data /////////////////////////////////////////
 void read_xyz_data(uint8_t address) {
