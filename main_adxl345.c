@@ -87,6 +87,7 @@
 #define MAX_TEST_DATA_BYTES     (15U)                /**< max number of test bytes to be used for tx and rx. */
 #define UART_TX_BUF_SIZE 256                         /**< UART TX buffer size. */
 #define UART_RX_BUF_SIZE 256                         /**< UART RX buffer size. */
+#define DATA_BUFFER_SIZE 252                         /**< data buffer for high frequency measurement. */
 
 static app_twi_t m_app_twi = APP_TWI_INSTANCE(0);
 
@@ -100,6 +101,9 @@ extern double xyz[3];
 // Buffer for data read from sensors.
 #define BUFFER_SIZE  11
 uint8_t m_buffer[BUFFER_SIZE];
+
+// Buffer for high frequency accelerometer data
+uint8_t data_buffer[DATA_BUFFER_SIZE];
 
 // Data structures needed for averaging of data read from sensors.
 // [max 32, otherwise "int16_t" won't be sufficient to hold the sum
@@ -257,6 +261,17 @@ void uart_error_handle(app_uart_evt_t * p_event)
     }
 }
 
+////////////////////////////////////// default call back //////////////////////////////////////////
+
+
+void default_cb(ret_code_t result, void *p_user_data) {
+
+  if (result != NRF_SUCCESS) {
+    uart_printf("read_all_cb - error: %d\r\n", (int)result);
+    return;
+  }
+  got_callback = true;
+  }
 ////////////////////////////////////// read_all call back //////////////////////////////////////////
 
 
@@ -726,7 +741,7 @@ int main(void)
 
     nrf_delay_ms(1000); // to flush log
 
-    set_range(4);
+    set_range(2);
 
     //*************************** CHECK **************************/
 
@@ -741,13 +756,14 @@ int main(void)
     setTapDuration(15);      // 625 µs per increment
     setDoubleTapLatency(80); // 1.25 ms per increment
     setDoubleTapWindow(200); // 1.25 ms per increment
+    setRate(800); // rate of update of data regs in Hz
     uart_printf("Double Tap Window = %d\n", getDoubleTapWindow());
     uart_printf("TapDuration = %d\n", getTapDuration());
 
-    setActivityXYZ(1, 0, 0);  // Set to activate movement detection in the axes "setActivityXYZ(X, Y, Z);" (1 == ON, 0 == OFF)
+    setActivityXYZ(0, 0, 0);  // Set to activate movement detection in the axes "setActivityXYZ(X, Y, Z);" (1 == ON, 0 == OFF)
     setActivityThreshold(75); // 62.5mg per increment   // Set activity   // Inactivity thresholds (0-255)
 
-    setInactivityXYZ(1, 0, 0);  // Set to detect inactivity in all the axes "setInactivityXYZ(X, Y, Z);" (1 == ON, 0 == OFF)
+    setInactivityXYZ(0, 0, 0);  // Set to detect inactivity in all the axes "setInactivityXYZ(X, Y, Z);" (1 == ON, 0 == OFF)
     setInactivityThreshold(75); // 62.5mg per increment   // Set inactivity // Inactivity thresholds (0-255)
     setTimeInactivity(10);      // How many seconds of no activity is inactive?
 
@@ -757,13 +773,73 @@ int main(void)
     uart_printf("isInActivityXEnabled = %d\n", isInactivityXEnabled());
 
 
-    rtc_config();
+//    rtc_config();
 
-    LEDS_ON(LED_0);
+//    LEDS_ON(LED_0);
+//
+//    while (true) {
+//      __WFI();
+//    }
 
-    while (true) {
-      __WFI();
-    }
+    uint32_t count = 0;
+    static uint8_t register_address;
+    register_address = ADXL345_DATAX0;
+    static app_twi_transfer_t const transfers[] =
+        {
+            ADXL345_READ(&register_address, m_buffer, 6)
+
+        };
+    static app_twi_transaction_t const transaction =
+        {
+            .callback = default_cb,
+            .p_user_data = NULL,
+            .p_transfers = transfers,
+            .number_of_transfers = sizeof(transfers) / sizeof(transfers[0])};
+//    while (true) {
+//    for (int i = 0; i < DATA_BUFFER_SIZE; i += 6) {
+//      got_callback = false;
+//      APP_ERROR_CHECK(app_twi_schedule(&m_app_twi, &transaction));
+//      while (!got_callback) {;;}
+//
+//      for (int j = 0; j < 6; j++) {
+//        data_buffer[i + j] = m_buffer[j];
+//      }
+//    }
+//
+//    for (int i = 0; i < DATA_BUFFER_SIZE; i += 6) {
+//         xyz_int[0] = (((int)data_buffer[i + 1]) << 8) | data_buffer[i];
+//         xyz_int[1] = (((int)data_buffer[i + 3]) << 8) | data_buffer[i + 2];
+//         xyz_int[2] = (((int)data_buffer[i + 5]) << 8) | data_buffer[i + 4];
+//
+//        uart_printf("X: %i Y: %i Z: %i\n",
+//            xyz_int[0],
+//            xyz_int[1],
+//            xyz_int[2]);
+//    nrf_delay_ms(10);
+//     }
+//
+//    nrf_delay_ms(2000);
+//    LEDS_INVERT(BSP_LED_0_MASK);
+//}
+//
+
+    while (count < 10000) {
+      got_callback = false;
+      APP_ERROR_CHECK(app_twi_schedule(&m_app_twi, &transaction));
+      while (!got_callback) {;;}
+
+         xyz_int[0] = (((int)m_buffer[1]) << 8) | m_buffer[0];
+         xyz_int[1] = (((int)m_buffer[3]) << 8) | m_buffer[2];
+         xyz_int[2] = (((int)m_buffer[5]) << 8) | m_buffer[4];
+
+        uart_printf("%i,%i,%i\n",
+            xyz_int[0],
+            xyz_int[1],
+            xyz_int[2]);
+//    nrf_delay_ms(1);
+    ++count;
 }
 
+
+}
 /** @} */
