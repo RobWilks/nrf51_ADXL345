@@ -105,15 +105,12 @@
 
 
 //rjw configure accelerometer data capture
-#define SIZE_FFT 0x8000   //no of datapoints for each measurement; power of 2 
-#define TIME_TO_NEXT_MEASUREMENT 5000 //in millisec
-#define NO_FILES 10000  //total number to measure in this sequence
+#define SIZE_FFT 0x1000   //no of datapoints for each measurement; power of 2 
+#define TIME_TO_NEXT_MEASUREMENT 30000 //in millisec
+#define NO_FILES 5  //total number to measure in this sequence
 
 //rjw configure rtc timer
-#define TICK_FREQUENCY 1024
-#define COMPARE_COUNTERTIME 10
-//volatile bool timeOut = false;
-#define TIME_OUT 10000
+#define TICK_FREQUENCY 1024 //approx 1kHz
 volatile bool tick = false;
 volatile uint32_t millis = 0;
 
@@ -705,10 +702,6 @@ static void rtc_config(void)
     //Enable tick event & interrupt
     nrf_drv_rtc_tick_enable(&rtc,true);
 
-    //Set compare channel to trigger interrupt after COMPARE_COUNTERTIME seconds
-    err_code = nrf_drv_rtc_cc_set(&rtc,0,COMPARE_COUNTERTIME * TICK_FREQUENCY,true);
-    APP_ERROR_CHECK(err_code);
-
     // Power on RTC instance.
     nrf_drv_rtc_enable(&rtc);
 }
@@ -723,7 +716,19 @@ static void lfclk_config(void)
 
     nrf_drv_clock_lfclk_request(NULL);
 }
+//////////////////////////////////////flash_led()//////////////////////////////////////////
 
+static void flash_led(uint8_t noTimes)
+{
+
+      for (uint8_t j = 0; j < noTimes; j++)
+      {
+      LEDS_INVERT(BSP_LED_0_MASK);
+      nrf_delay_ms(200);
+      LEDS_INVERT(BSP_LED_0_MASK);
+      nrf_delay_ms(200);
+      }
+}
 //////////////////////////////////////fatfs_example()//////////////////////////////////////////
 
 /**
@@ -987,8 +992,8 @@ int main(void)
 
   //*************************** start measurements **************************/
 
-
-    for (j = firstFile; j < firstFile + 1; j++) {
+    flash_led(7); // indicate ready to start
+    for (j = firstFile; j < firstFile + NO_FILES; j++) {
       uint16_t temp = j;
       for (uint8_t k = 0; k < 4; k++) {
         filename[7 - k] = temp % 10 + '0';
@@ -998,15 +1003,12 @@ int main(void)
       ff_result = f_open(&dataFile, filename, FA_READ | FA_WRITE | FA_OPEN_APPEND);
       if (ff_result != FR_OK) {
         uart_printf("Unable to create file: %i.\r\n", j);
+        flash_led(3); 
+
         while (true) {
         };
       }
       uart_printf("Writing file: %i.\r\n", j);
-      for (j = 0; j < 16; j++)
-      {
-      LEDS_INVERT(BSP_LED_4_MASK);
-      nrf_delay_ms(500);
-      }
     #if CALIBRATE
       uint8_t nPositions = 0;
       while (!button1_pressed) {
@@ -1048,36 +1050,40 @@ int main(void)
       }
 
 #else
+      
       LEDS_INVERT(BSP_LED_0_MASK);
     uint32_t count = 0;
   //*************************** CONFIGURE RTC **************************/
-  // need to find way to retrigger compare timer  
     rtc_config();
-    while (millis < TIME_OUT)
-    {
-    while (!tick) {;;};
-    if (!(millis & 0xff)) LEDS_INVERT(BSP_LED_0_MASK);
-    tick = false;
-    }
-      (void)f_close(&dataFile);
-      while(true) {;;}
+//    while (millis < TIME_OUT)
+//    {
+//    while (!tick) {;;};
+//    if (!(millis & 0xff)) LEDS_INVERT(BSP_LED_0_MASK);
+//    tick = false;
+//    }
+//      (void)f_close(&dataFile);
+//      while(true) {;;}
 
-      while ((count < SIZE_FFT)) {
-        got_callback = false;
-        APP_ERROR_CHECK(app_twi_schedule(&m_app_twi, &transaction));
-        while (!got_callback) {
-        }
-
-        ff_result = f_write(&dataFile, m_buffer, 6, (UINT *)&bytes_written);
-
-        ++count;
+    while ((count < SIZE_FFT)) {
+      while (!tick) {
+        ;
+        ;
+      };
+      tick = false;
+      got_callback = false;
+      APP_ERROR_CHECK(app_twi_schedule(&m_app_twi, &transaction));
+      while (!got_callback) {
       }
-      (void)f_close(&dataFile);
-      LEDS_INVERT(BSP_LED_0_MASK);
-    #endif
+
+      ff_result = f_write(&dataFile, m_buffer, 6, (UINT *)&bytes_written);
+
+      ++count;
+    }
+    (void)f_close(&dataFile);
+    LEDS_INVERT(BSP_LED_0_MASK);
+#endif
       nrf_delay_ms(TIME_TO_NEXT_MEASUREMENT);
     }
-    LEDS_INVERT(BSP_LED_4_MASK);
     while (true) {
     }
 }
