@@ -58,8 +58,6 @@
 #include "compiler_abstraction.h"
 #include "diskio_blkdev.h"
 #include "ff.h"
-#include "lm75b.h"
-#include "mma7660.h"
 #include "nrf.h"
 #include "nrf_block_dev_sdc.h"
 #include "nrf_delay.h"
@@ -71,11 +69,8 @@
 #define NRF_LOG_MODULE_NAME "APP"
 #include "nrf_log.h"
 #include "nrf_log_ctrl.h"
-#include <__vfprintf.h> //rjw
 #include <stdarg.h>     //rjw
-#include <stdio.h>      //rjw
-
-#define DEBUG 0
+#include <__vfprintf.h> //rjw
 
 #define MAX_PENDING_TRANSACTIONS 5
 
@@ -138,37 +133,6 @@ uint8_t m_buffer[BUFFER_SIZE];
 // Buffer for high frequency accelerometer data
 uint8_t data_buffer[DATA_BUFFER_SIZE];
 
-// Data structures needed for averaging of data read from sensors.
-// [max 32, otherwise "int16_t" won't be sufficient to hold the sum
-//  of temperature samples]
-#define NUMBER_OF_SAMPLES 16
-#define CALIBRATE 0
-typedef struct
-{
-  int16_t temp;
-  int16_t x;
-  int16_t y;
-  int16_t z;
-} sum_t;
-
-static sum_t m_sum = {0, 0, 0, 0};
-
-typedef struct
-{
-  // [use bit fields to fit whole structure into one 32-bit word]
-  int16_t temp : 11;
-  int8_t x : 6;
-  int8_t y : 6;
-  int8_t z : 6;
-} sample_t;
-
-static sample_t m_samples[NUMBER_OF_SAMPLES] = {{0, 0, 0, 0}};
-
-static uint8_t m_sample_idx = 0;
-
-// Value previously read from MMA7660's Tilt register - used to detect change
-// in orientation, shake signaling etc.
-static uint8_t m_prev_tilt = 0;
 
 #if defined(__GNUC__) && (__LINT__ == 0)
 // This is required if one wants to use floating-point values in 'printf'
@@ -177,89 +141,7 @@ static uint8_t m_prev_tilt = 0;
 __ASM(".global _printf_float");
 #endif
 
-////////////////////////////////////////////////////////////////////////////////
-// Reading of data from sensors - current temperature from LM75B and from
-// MMA7660: X, Y, Z and tilt status.
-#if (BUFFER_SIZE < 6)
-#error Buffer too small.
-#endif
-#define GET_ACC_VALUE(axis, reg_data)      \
-  do {                                     \
-    if (MMA7660_DATA_IS_VALID(reg_data)) { \
-      axis = MMA7660_GET_ACC(reg_data);    \
-    }                                      \
-  } while (0)
-/*
-void read_all_cb(ret_code_t result, void * p_user_data)
-{
-    if (result != NRF_SUCCESS)
-    {
-        uart_printf("read_all_cb - error: %d\r\n", (int)result);
-        return;
-    }
 
-    sample_t * p_sample = &m_samples[m_sample_idx];
-    m_sum.temp -= p_sample->temp;
-    m_sum.x    -= p_sample->x;
-    m_sum.y    -= p_sample->y;
-    m_sum.z    -= p_sample->z;
-
-    uint8_t temp_hi = m_buffer[0];
-    uint8_t temp_lo = m_buffer[1];
-    uint8_t x_out   = m_buffer[2];
-    uint8_t y_out   = m_buffer[3];
-    uint8_t z_out   = m_buffer[4];
-    uint8_t tilt    = m_buffer[5];
-
-    p_sample->temp = LM75B_GET_TEMPERATURE_VALUE(temp_hi, temp_lo);
-    GET_ACC_VALUE(p_sample->x, x_out);
-    GET_ACC_VALUE(p_sample->y, y_out);
-    GET_ACC_VALUE(p_sample->z, z_out);
-    if (!MMA7660_DATA_IS_VALID(tilt))
-    {
-        tilt = m_prev_tilt;
-    }
-
-    m_sum.temp += p_sample->temp;
-    m_sum.x    += p_sample->x;
-    m_sum.y    += p_sample->y;
-    m_sum.z    += p_sample->z;
-
-    ++m_sample_idx;
-    if (m_sample_idx >= NUMBER_OF_SAMPLES)
-    {
-        m_sample_idx = 0;
-    }
-
-    // Show current average values every time sample index rolls over (for RTC
-    // ticking at 32 Hz and 16 samples it will be every 500 ms) or when tilt
-    // status changes.
-    if (m_sample_idx == 0 || (m_prev_tilt && m_prev_tilt != tilt))
-    {
-        char const * orientation;
-        switch (MMA7660_GET_ORIENTATION(tilt))
-        {
-            case MMA7660_ORIENTATION_LEFT:  orientation = "LEFT";  break;
-            case MMA7660_ORIENTATION_RIGHT: orientation = "RIGHT"; break;
-            case MMA7660_ORIENTATION_DOWN:  orientation = "DOWN";  break;
-            case MMA7660_ORIENTATION_UP:    orientation = "UP";    break;
-            default:                        orientation = "?";     break;
-        }
-
-        uart_printf("Temp: " NRF_LOG_FLOAT_MARKER " | X: %3d, Y: %3d, Z: %3d ",
-            NRF_LOG_FLOAT((float)((m_sum.temp * 0.125) / NUMBER_OF_SAMPLES)),
-            m_sum.x / NUMBER_OF_SAMPLES,
-            m_sum.y / NUMBER_OF_SAMPLES,
-            m_sum.z / NUMBER_OF_SAMPLES);
-
-        NRF_LOG_RAW_INFO("| %s%s%s\r\n",
-            (uint32_t)orientation,
-            (uint32_t)(MMA7660_TAP_DETECTED(tilt)   ? " TAP"   : ""),
-            (uint32_t)(MMA7660_SHAKE_DETECTED(tilt) ? " SHAKE" : ""));
-        m_prev_tilt = tilt;
-    }
-}
-*/
 ////////////////////////////////////// uart_printf //////////////////////////////////////////
 
 void uart_printf(const char *fmt, ...) {
@@ -659,6 +541,8 @@ int main(void) {
   APP_ERROR_CHECK(err_code);
 #endif // APP_UART_ENABLED
 
+  APP_ERROR_CHECK(NRF_LOG_INIT(NULL));
+
   // Start internal LFCLK XTAL oscillator - it is needed by BSP to handle
   // buttons with the use of APP_TIMER and for "read_all" ticks generation
   // (by RTC).
@@ -667,6 +551,8 @@ int main(void) {
 #if CALIBRATE
   bsp_config();
 #endif // CALIBRATE
+
+  rtc_config();
 
   twi_config();
 
@@ -808,8 +694,6 @@ int main(void) {
 
     LEDS_INVERT(BSP_LED_0_MASK);
     uint32_t count = 0;
-    //*************************** CONFIGURE RTC **************************/
-    rtc_config();
     while ((count < SIZE_FFT)) {
       while (!tick) {
       };
