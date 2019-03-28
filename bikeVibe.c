@@ -75,18 +75,14 @@
 #include <stdarg.h>//rjw
 #include <__vfprintf.h>//rjw
 
+#define DEBUG 0
+
 #define MAX_PENDING_TRANSACTIONS    5
 
 #define APP_TIMER_PRESCALER         0
 #define APP_TIMER_OP_QUEUE_SIZE     2
 
 
-// Pin number for indicating communication with sensors.
-#ifdef BSP_LED_3
-    #define READ_ALL_INDICATOR  BSP_BOARD_LED_3
-#else
-    #error "Please choose an output pin"
-#endif
 
 #define MAX_TEST_DATA_BYTES     (15U)                /**< max number of test bytes to be used for tx and rx. */
 #define UART_TX_BUF_SIZE 256                         /**< UART TX buffer size. */
@@ -279,6 +275,7 @@ void read_all_cb(ret_code_t result, void * p_user_data)
 
 void uart_printf(const char *fmt, ...)
 {
+    #if APP_UART_ENABLED
     char buf[200], *p;
     va_list ap;
     va_start(ap, fmt);
@@ -286,6 +283,7 @@ void uart_printf(const char *fmt, ...)
     for (p = buf; *p; ++p)
     app_uart_put(*p);
     va_end(ap);
+    #endif // APP_UART_ENABLED
  }
 
 
@@ -312,58 +310,11 @@ void uart_error_handle(app_uart_evt_t * p_event)
 void default_cb(ret_code_t result, void *p_user_data) {
 
   if (result != NRF_SUCCESS) {
-    uart_printf("read_all_cb - error: %d\r\n", (int)result);
+    uart_printf("default_cb - error: %d\r\n", (int)result);
     return;
   }
   got_callback = true;
   }
-////////////////////////////////////// read_all call back //////////////////////////////////////////
-
-
-void read_all_cb(ret_code_t result, void *p_user_data) {
-
-  if (result != NRF_SUCCESS) {
-    uart_printf("read_all_cb - error: %d\r\n", (int)result);
-    return;
-  }
-
-  int x_out = (((int)m_buffer[1]) << 8) | m_buffer[0];
-  int y_out = (((int)m_buffer[3]) << 8) | m_buffer[2];
-  int z_out = (((int)m_buffer[5]) << 8) | m_buffer[4];
-
-  uart_printf("X: %d, Y: %d, Z: %d\n",
-      x_out,
-      y_out,
-      z_out);
-}
-////////////////////////////////////// read_all //////////////////////////////////////////
-
-void read_all(void)
-{
-    // Signal on LED that something is going on.
-    bsp_board_led_invert(READ_ALL_INDICATOR);
-
-    // [these structures have to be "static" - they cannot be placed on stack
-    //  since the transaction is scheduled and these structures most likely
-    //  will be referred after this function returns]
-    static app_twi_transfer_t const transfers[] =
-    {
-//        LM75B_READ_TEMP(&m_buffer[0])
-//        ,
-//        MMA7660_READ_XYZ_AND_TILT(&m_buffer[2])
-        ADXL345_READ_XYZ_AND_TILT(&m_buffer[0])
-    };
-    static app_twi_transaction_t const transaction =
-    {
-        .callback            = read_all_cb,
-        .p_user_data         = NULL,
-        .p_transfers         = transfers,
-        .number_of_transfers = sizeof(transfers) / sizeof(transfers[0])
-    };
-
-    APP_ERROR_CHECK(app_twi_schedule(&m_app_twi, &transaction));
-}
-
 ////////////////////////////////////// read_data call back //////////////////////////////////////////
 // read_data and call back
 // result of read is in m_buffer[]
@@ -429,8 +380,6 @@ void read_xyz_data_cb(ret_code_t result, void *p_user_data) {
 /////////////////////////////////////// read_xyz_data /////////////////////////////////////////
 void read_xyz_data(uint8_t address) {
 
-  // Signal on LED that something is going on.
-  bsp_board_led_invert(READ_ALL_INDICATOR);
 
   // [these structures have to be "static" - they cannot be placed on stack
   //  since the transaction is scheduled and these structures most likely
@@ -458,7 +407,7 @@ void read_xyz_data(uint8_t address) {
 
 void write_reg_cb(ret_code_t result, void *p_user_data) {
   if (result != NRF_SUCCESS) {
-    uart_printf("read_data_cb - error: %d\r\n", (int)result);
+    uart_printf("write_reg_cb - error: %d\r\n", (int)result);
     return;
   }
 
@@ -510,111 +459,6 @@ void write_reg2(uint8_t address, uint8_t val) {
       };
   APP_ERROR_CHECK(app_twi_perform(&m_app_twi, write_adxl345_data_format,
       1, NULL));
-}
-
-static void read_lm75b_registers_cb(ret_code_t result, void * p_user_data)
-{
-    if (result != NRF_SUCCESS)
-    {
-        uart_printf("read_lm75b_registers_cb - error: %d\r\n", (int)result);
-        return;
-    }
-
-    uart_printf("LM75B:\r\n");
-    NRF_LOG_HEXDUMP_INFO(m_buffer, 7);
-}
-static void read_lm75b_registers(void)
-{
-    // [these structures have to be "static" - they cannot be placed on stack
-    //  since the transaction is scheduled and these structures most likely
-    //  will be referred after this function returns]
-    static app_twi_transfer_t const transfers[] =
-    {
-        LM75B_READ(&lm75b_conf_reg_addr,  &m_buffer[0], 1),
-        LM75B_READ(&lm75b_temp_reg_addr,  &m_buffer[1], 2),
-        LM75B_READ(&lm75b_tos_reg_addr,   &m_buffer[3], 2),
-        LM75B_READ(&lm75b_thyst_reg_addr, &m_buffer[5], 2)
-    };
-    static app_twi_transaction_t const transaction =
-    {
-        .callback            = read_lm75b_registers_cb,
-        .p_user_data         = NULL,
-        .p_transfers         = transfers,
-        .number_of_transfers = sizeof(transfers) / sizeof(transfers[0])
-    };
-
-    APP_ERROR_CHECK(app_twi_schedule(&m_app_twi, &transaction));
-}
-
-
-#if (BUFFER_SIZE < MMA7660_NUMBER_OF_REGISTERS)
-    #error Buffer too small.
-#endif
-static void read_mma7660_registers_cb(ret_code_t result, void * p_user_data)
-{
-    if (result != NRF_SUCCESS)
-    {
-        uart_printf("read_mma7660_registers_cb - error: %d\r\n", (int)result);
-        return;
-    }
-
-    uart_printf("MMA7660:\r\n");
-    NRF_LOG_HEXDUMP_INFO(m_buffer, MMA7660_NUMBER_OF_REGISTERS);
-}
-static void read_mma7660_registers(void)
-{
-    // [these structures have to be "static" - they cannot be placed on stack
-    //  since the transaction is scheduled and these structures most likely
-    //  will be referred after this function returns]
-    static app_twi_transfer_t const transfers[] =
-    {
-        MMA7660_READ(&mma7660_xout_reg_addr,
-            m_buffer, MMA7660_NUMBER_OF_REGISTERS)
-    };
-    static app_twi_transaction_t const transaction =
-    {
-        .callback            = read_mma7660_registers_cb,
-        .p_user_data         = NULL,
-        .p_transfers         = transfers,
-        .number_of_transfers = sizeof(transfers) / sizeof(transfers[0])
-    };
-
-    APP_ERROR_CHECK(app_twi_schedule(&m_app_twi, &transaction));
-}
-
-////////////////////////////////////////////////////////////////////////////////
-// Read ADXL345 xyz registers 
-//
-static void read_adxl345_registers_cb(ret_code_t result, void * p_user_data)
-{
-    if (result != NRF_SUCCESS)
-    {
-        uart_printf("read_adxl345_registers_cb - error: %d\r\n", (int)result);
-        return;
-    }
-
-    uart_printf("ADXL345:\r\n");
-    NRF_LOG_HEXDUMP_INFO(m_buffer, ADXL345_NUMBER_OF_REGISTERS);
-}
-static void read_adxl345_registers(void)
-{
-    // [these structures have to be "static" - they cannot be placed on stack
-    //  since the transaction is scheduled and these structures most likely
-    //  will be referred after this function returns]
-    static app_twi_transfer_t const transfers[] =
-    {
-        ADXL345_READ(&adxl345_xout_reg_addr,
-            m_buffer, ADXL345_NUMBER_OF_REGISTERS)
-    };
-    static app_twi_transaction_t const transaction =
-    {
-        .callback            = read_adxl345_registers_cb,
-        .p_user_data         = NULL,
-        .p_transfers         = transfers,
-        .number_of_transfers = sizeof(transfers) / sizeof(transfers[0])
-    };
-
-    APP_ERROR_CHECK(app_twi_schedule(&m_app_twi, &transaction));
 }
 
 
@@ -872,7 +716,7 @@ int main(void)
 
     bsp_board_leds_init();
 
-
+    #if APP_UART_ENABLED
     // Initialise UART
 
         const app_uart_comm_params_t comm_params =
@@ -894,7 +738,7 @@ int main(void)
                          err_code);
 
     APP_ERROR_CHECK(err_code);
-
+    #endif // APP_UART_ENABLED
 
 
     // Start internal LFCLK XTAL oscillator - it is needed by BSP to handle
@@ -910,7 +754,7 @@ int main(void)
     twi_config();
 
 
-//    rjw initialisation of ADX345 
+//    rjw initialisation of ADXL345 
 
     APP_ERROR_CHECK(app_twi_perform(&m_app_twi, adxl345_init_transfers,
         ADXL345_INIT_TRANSFER_COUNT, NULL));
