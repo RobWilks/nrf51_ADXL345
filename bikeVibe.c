@@ -95,13 +95,14 @@
 //configure accelerometer data capture
 #define SIZE_FFT 0x1000                //no of datapoints for each measurement; power of 2
 #define TIME_TO_NEXT_MEASUREMENT 30000 //in millisec
-#define NO_FILES 5                     //total number to measure in this sequence
 
 //configure rtc timer
 #define TICK_FREQUENCY 1024 //approx 1kHz
 volatile bool tick = false;
 volatile uint32_t millis = 0;
 
+#define NO_FILES 100        //total number to measure in this sequence
+#define MAX_FILE_NO 10000 //last file no available
 char filename[] = "adxl0000.DAT";
 
 /**
@@ -370,14 +371,19 @@ static void lfclk_config(void) {
 }
 //////////////////////////////////////flash_led()//////////////////////////////////////////
 
-static void flash_led(uint8_t noTimes) {
-
-  for (uint8_t j = 0; j < noTimes; j++) {
-    LEDS_INVERT(BSP_LED_0_MASK);
-    nrf_delay_ms(200);
-    LEDS_INVERT(BSP_LED_0_MASK);
-    nrf_delay_ms(200);
-  }
+static void flash_led(uint16_t noTimes, bool forever) {
+  do {
+    for (uint16_t j = 0; j < noTimes; j++) {
+      LEDS_INVERT(BSP_LED_0_MASK);
+      nrf_delay_ms(200);
+      LEDS_INVERT(BSP_LED_0_MASK);
+      nrf_delay_ms(200);
+    }
+    if (forever)
+    {
+      nrf_delay_ms(10000 - noTimes * 400);
+      }
+  } while (forever);
 }
 //////////////////////////////////////fatfs_init()//////////////////////////////////////////
 
@@ -408,8 +414,7 @@ static void fatfs_init() {
   }
   if (disk_state) {
     uart_printf("Disk initialization failed.\r\n");
-    flash_led(2);
-    while(true) {}
+    flash_led(2, true);
     return;
   }
 
@@ -421,6 +426,8 @@ static void fatfs_init() {
   ff_result = f_mount(&fs, "", 1);
   if (ff_result) {
     uart_printf("Mount failed.\r\n");
+    flash_led(4, true);
+    while(true) {}
     return;
   }
 
@@ -609,7 +616,7 @@ int main(void) {
 
   uint16_t j = 0;
   uint16_t firstFile = 0xffff;
-  while ((j < NO_FILES) && (firstFile == 0xffff)) {
+  while ((j < MAX_FILE_NO) && (firstFile == 0xffff)) {
     uint16_t temp = j;
     for (uint8_t k = 0; k < 4; k++) {
       filename[7 - k] = temp % 10 + '0';
@@ -633,8 +640,9 @@ int main(void) {
 
   //*************************** start measurements **************************/
 
-  flash_led(7); // indicate ready to start
+  flash_led(7, false); // indicate ready to start
   for (j = firstFile; j < firstFile + NO_FILES; j++) {
+    uint32_t nextMeasurement = millis + TIME_TO_NEXT_MEASUREMENT;
     uint16_t temp = j;
     for (uint8_t k = 0; k < 4; k++) {
       filename[7 - k] = temp % 10 + '0';
@@ -644,7 +652,7 @@ int main(void) {
     ff_result = f_open(&dataFile, filename, FA_READ | FA_WRITE | FA_OPEN_APPEND);
     if (ff_result != FR_OK) {
       uart_printf("Unable to create file: %i.\r\n", j);
-      flash_led(3);
+      flash_led(3, true);
 
       while (true) {
       };
@@ -709,7 +717,7 @@ int main(void) {
     }
     (void)f_close(&dataFile);
     LEDS_INVERT(BSP_LED_0_MASK);
-    nrf_delay_ms(TIME_TO_NEXT_MEASUREMENT);
+    while (millis < nextMeasurement) {};
 #endif // CALIBRATE
   }
   while (true) {
