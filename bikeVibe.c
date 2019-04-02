@@ -97,7 +97,7 @@
 #define TIME_TO_NEXT_MEASUREMENT 30 //in sec
 
 //configure rtc timer
-#define TICK_FREQUENCY 4096 //approx 1kHz
+#define TICK_FREQUENCY 1024 //approx 1kHz
 volatile bool timeOut = false;
 volatile bool tick = false;
 
@@ -376,7 +376,7 @@ static void flash_led(uint16_t noTimes, bool forever) {
       LEDS_INVERT(BSP_LED_0_MASK);
       nrf_delay_ms(100);
       LEDS_INVERT(BSP_LED_0_MASK);
-      nrf_delay_ms(100);
+      nrf_delay_ms(300);
     }
     if (forever)
     {
