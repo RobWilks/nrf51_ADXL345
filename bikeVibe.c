@@ -94,12 +94,12 @@
 
 //configure accelerometer data capture
 #define SIZE_FFT 0x1000                //no of datapoints for each measurement; power of 2
-#define TIME_TO_NEXT_MEASUREMENT 30000 //in millisec
+#define TIME_TO_NEXT_MEASUREMENT 30 //in sec
 
 //configure rtc timer
-#define TICK_FREQUENCY 1024 //approx 1kHz
+#define TICK_FREQUENCY 4096 //approx 1kHz
+volatile bool timeOut = false;
 volatile bool tick = false;
-volatile uint32_t millis = 0;
 
 #define NO_FILES 100        //total number to measure in this sequence
 #define MAX_FILE_NO 10000 //last file no available
@@ -335,12 +335,11 @@ const nrf_drv_rtc_t rtc = NRF_DRV_RTC_INSTANCE(0); /**< Declaring an instance of
 ////////////////////////////////////////////////////////////////////////////////
 // RTC tick events generation.
 static void rtc_handler(nrf_drv_rtc_int_type_t int_type) {
-  //  if (int_type == NRF_DRV_RTC_INT_COMPARE0) {
-  //    timeOut = true;
-  //  }
+  if (int_type == NRF_DRV_RTC_INT_COMPARE0) {
+    timeOut = true;
+  }
   if (int_type == NRF_DRV_RTC_INT_TICK) {
     tick = true;
-    ++millis;
   }
 }
 
@@ -354,12 +353,12 @@ static void rtc_config(void) {
   err_code = nrf_drv_rtc_init(&rtc, &config, rtc_handler);
   APP_ERROR_CHECK(err_code);
 
-  //Enable tick event & interrupt
-  nrf_drv_rtc_tick_enable(&rtc, true);
 
   // Power on RTC instance.
   nrf_drv_rtc_enable(&rtc);
 }
+
+////////////////////////////////////////////////////////////////////////////////
 
 static void lfclk_config(void) {
   uint32_t err_code;
@@ -375,9 +374,9 @@ static void flash_led(uint16_t noTimes, bool forever) {
   do {
     for (uint16_t j = 0; j < noTimes; j++) {
       LEDS_INVERT(BSP_LED_0_MASK);
-      nrf_delay_ms(200);
+      nrf_delay_ms(100);
       LEDS_INVERT(BSP_LED_0_MASK);
-      nrf_delay_ms(200);
+      nrf_delay_ms(100);
     }
     if (forever)
     {
@@ -414,7 +413,7 @@ static void fatfs_init() {
   }
   if (disk_state) {
     uart_printf("Disk initialization failed.\r\n");
-    flash_led(2, true);
+    flash_led(4, true);
     return;
   }
 
@@ -426,7 +425,7 @@ static void fatfs_init() {
   ff_result = f_mount(&fs, "", 1);
   if (ff_result) {
     uart_printf("Mount failed.\r\n");
-    flash_led(4, true);
+    flash_led(5, true);
     while(true) {}
     return;
   }
@@ -516,6 +515,7 @@ if (ff_result != FR_OK) {
   return;
 }
 ////////////////////////////////////////////////////////////////////////////////
+
 
 int main(void) {
   uint32_t err_code; // added for UART
@@ -640,9 +640,15 @@ int main(void) {
 
   //*************************** start measurements **************************/
 
-  flash_led(7, false); // indicate ready to start
+  flash_led(7, false); // indicate initialised
   for (j = firstFile; j < firstFile + NO_FILES; j++) {
-    uint32_t nextMeasurement = millis + TIME_TO_NEXT_MEASUREMENT;
+    tick = false;
+    timeOut = false;
+    nrf_drv_rtc_tick_enable(&rtc, true);
+    nrf_drv_rtc_counter_clear(&rtc);
+    err_code = nrf_drv_rtc_cc_set(&rtc, 0, TIME_TO_NEXT_MEASUREMENT * TICK_FREQUENCY, true);
+    APP_ERROR_CHECK(err_code);
+
     uint16_t temp = j;
     for (uint8_t k = 0; k < 4; k++) {
       filename[7 - k] = temp % 10 + '0';
@@ -652,7 +658,7 @@ int main(void) {
     ff_result = f_open(&dataFile, filename, FA_READ | FA_WRITE | FA_OPEN_APPEND);
     if (ff_result != FR_OK) {
       uart_printf("Unable to create file: %i.\r\n", j);
-      flash_led(3, true);
+      flash_led(6, true);
 
       while (true) {
       };
@@ -700,7 +706,7 @@ int main(void) {
 
 #else
 
-    LEDS_INVERT(BSP_LED_0_MASK);
+    flash_led(3, false); // indicate about to start measuring
     uint32_t count = 0;
     while ((count < SIZE_FFT)) {
       while (!tick) {
@@ -716,8 +722,12 @@ int main(void) {
       ++count;
     }
     (void)f_close(&dataFile);
-    LEDS_INVERT(BSP_LED_0_MASK);
-    while (millis < nextMeasurement) {};
+    flash_led(1, false); // indicate finished measuring
+    nrf_drv_rtc_tick_disable(&rtc);
+    while (!timeOut) {
+    __WFE();
+    }
+
 #endif // CALIBRATE
   }
   while (true) {
