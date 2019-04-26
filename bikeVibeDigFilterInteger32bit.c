@@ -85,8 +85,8 @@
 #define DATA_BUFFER_SIZE 252      /**< data buffer for high frequency measurement. */
 
 // added for SPI comms
-#define FILE_NAME "ADXL_DAT.TXT"
-#define TEST_STRING "SD card example.\r\n"
+#define FILE_NAME "ADXL_CFG.TXT"
+#define TEST_STRING "3.14,6.666\n237,-17,2.34\r\n100,12578\r\n"
 
 //mod for BLE400
 #define SDC_SCK_PIN SPIM0_SCK_PIN   ///< SDC serial clock (SCK) pin.
@@ -111,6 +111,7 @@ char filename[] = "adxl0000.DAT";
 #define USE_SD 1
 #define TEST false
 #define NO_TEST_DATA 512
+#define SIZE_BUFF 17
 /**
  * @brief  SDC block device definition
  * */
@@ -121,7 +122,9 @@ NRF_BLOCK_DEV_SDC_DEFINE(
         APP_SDCARD_CONFIG(SDC_MOSI_PIN, SDC_MISO_PIN, SDC_SCK_PIN, SDC_CS_PIN)),
     NFR_BLOCK_DEV_INFO_CONFIG("Nordic", "SDC", "1.00"));
 
-char data[50] = {0}; /* Line buffer */
+char data[SIZE_BUFF + 1] = {0}; /* Line buffer */
+char temp[SIZE_BUFF + 1] = {0}; /* Temporary buffer */
+
 // end of SPI / SDC
 
 static app_twi_t m_app_twi = APP_TWI_INSTANCE(0);
@@ -137,8 +140,6 @@ extern double xyz[3];
 #define BUFFER_SIZE 11
 uint8_t m_buffer[BUFFER_SIZE];
 
-// Buffer for high frequency accelerometer data
-uint8_t data_buffer[DATA_BUFFER_SIZE];
 
 #if defined(__GNUC__) && (__LINT__ == 0)
 // This is required if one wants to use floating-point values in 'printf'
@@ -485,86 +486,116 @@ static void fatfs_init() {
 
   // omit directory listing and dummy read/write
   // to do read config file from SD card
-  /*
-    uart_printf("\r\n Listing directory: /\r\n");
-    ff_result = f_opendir(&dir, "/");
-    if (ff_result)
-    {
-        uart_printf("Directory listing failed!\r\n");
-        return;
+
+  printf("\r\n Listing directory: /\r\n");
+  ff_result = f_opendir(&dir, "/");
+  if (ff_result) {
+    printf("Directory listing failed!\r\n");
+    return;
+  }
+
+  do {
+    ff_result = f_readdir(&dir, &fno);
+    if (ff_result != FR_OK) {
+      printf("Directory read failed.");
+      return;
     }
-    
-    do
-    {
-        ff_result = f_readdir(&dir, &fno);
-        if (ff_result != FR_OK)
-        {
-            uart_printf("Directory read failed.");
-            return;
-        }
-        
-        if (fno.fname[0])
-        {
-            if (fno.fattrib & AM_DIR)
-            {
-                NRF_LOG_RAW_INFO("   <DIR>   %s\r\n",(uint32_t)fno.fname);
-            }
-            else
-            {
-                NRF_LOG_RAW_INFO("%9lu  %s\r\n", fno.fsize, (uint32_t)fno.fname);
-            }
-        }
+
+    if (fno.fname[0]) {
+      if (fno.fattrib & AM_DIR) {
+        NRF_LOG_RAW_INFO("   <DIR>   %s\r\n", (uint32_t)fno.fname);
+      } else {
+        NRF_LOG_RAW_INFO("%9lu  %s\r\n", fno.fsize, (uint32_t)fno.fname);
+      }
     }
-    while (fno.fname[0]);
-    NRF_LOG_RAW_INFO("\r\n");
-    
-    uart_printf("Writing to file " FILE_NAME "...\r\n");
-    ff_result = f_open(&file, FILE_NAME, FA_READ | FA_WRITE | FA_OPEN_APPEND);
+  } while (fno.fname[0]);
+  NRF_LOG_RAW_INFO("\r\n");
+  /*   
+    printf("Writing to file " FILE_NAME "...\r\n");
+    ff_result = f_open(&file, FILE_NAME, FA_READ | FA_WRITE
+     //  | FA_OPEN_APPEND
+     );
     if (ff_result != FR_OK)
     {
-        uart_printf("Unable to open or create file: " FILE_NAME ".\r\n");
+        printf("Unable to open or create file: " FILE_NAME ".\r\n");
         return;
     }
 
     ff_result = f_write(&file, TEST_STRING, sizeof(TEST_STRING) - 1, (UINT *) &bytes_written);
     if (ff_result != FR_OK)
     {
-        uart_printf("Write failed\r\n.");
+        printf("Write failed\r\n.");
     }
     else
     {
-        uart_printf("%d bytes written.\r\n", bytes_written);
+        printf("%d bytes written.\r\n", bytes_written);
     }
 
     (void) f_close(&file);
 */
 
-  /*
-// addition
+  // addition
 
-//read content of the file
-ff_result = f_open(&file, FILE_NAME, FA_READ);
-if (ff_result != FR_OK)
-{
-    uart_printf("Unable to open or create file: " FILE_NAME ".\r\n");
+  //read content of the file
+  ff_result = f_open(&file, FILE_NAME, FA_READ);
+  if (ff_result != FR_OK) {
+    printf("Unable to open or create file: " FILE_NAME ".\r\n");
     return;
-}
+  }
 
-uint16_t size = f_size(&file);
-uart_printf("size of the file in bytes = %d\r\n", size);
+  uint16_t size = f_size(&file);
+  printf("size of the file in bytes = %d\r\n", size);
 
-bytes_read = 0;
+  bytes_read = 0;
 
-ff_result = f_read(&file, data, sizeof(data), (UINT *)&bytes_read);
+  const char newLine[2] = {"\n\0"};
+  const char *srch_str = (char *)newLine;
+ 
+  int integer1, integer2;
+  float num1, num2;
 
-if (ff_result != FR_OK) {
-  uart_printf("Unable to read or create file: " FILE_NAME ".\r\n");
-  return;
-} else {
-  uart_printf("%d bytes read\r\n", bytes_read);
-}
-(void) f_close(&file);
-*/
+  while (file.fptr < size) {
+    printf("file ptr %i\r\n", (uint32_t)file.fptr);
+    ff_result = f_read(&file, data, sizeof(data) - 1, (UINT *)&bytes_read); // the last item of data is a NULL terminator
+    printf("file ptr %i\r\n", (uint32_t)file.fptr);
+    char *p = (char *)data;
+    char ** new_data = &p;
+   
+    if (ff_result != FR_OK) {
+      printf("Unable to read or create file: " FILE_NAME ".\r\n");
+      return;
+    } else {
+      printf("%d bytes read\r\n", bytes_read);
+    }
+
+    while (**new_data != NULL) // test for end of buffer
+    {
+      char *val;
+      char *old_data = strsep(new_data, srch_str); //read to the next new line and set it to NULL
+      if ((*(*new_data - 1)) == NULL)              // found new line
+      {
+        if (*temp == NULL) {
+          int result = sscanf(old_data, "%f,%f", &num1, &num2);
+        } else 
+        {
+          val = strncat(temp, (const char *)old_data, SIZE_BUFF);
+          //int result = sscanf(data,"%i,%i,%f", &integer1, &integer2, &num);
+          int result = sscanf(temp, "%f,%f", &num1, &num2);
+          *temp = NULL;
+        }
+        //printf("integers read %i and %i\r\n", integer1, integer2);
+        printf("float read %f,%f\r\n", num1, num2);
+      } else {
+        int bytes_left = *new_data - old_data - 1;
+        printf("bytes left %i\n", bytes_left);
+        val = strncpy(temp, (const char *)old_data, SIZE_BUFF); //save tail of file
+//        temp[bytes_left] = NULL;                                //ensure tail terminated with a NULL
+      }
+    }
+  }
+  (void)f_close(&file);
+  while (true) {
+  }
   return;
 }
 ////////////////////////////////////// file_printf //////////////////////////////////////////
