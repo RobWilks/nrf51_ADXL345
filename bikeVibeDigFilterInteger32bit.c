@@ -85,8 +85,8 @@
 #define DATA_BUFFER_SIZE 252      /**< data buffer for high frequency measurement. */
 
 // added for SPI comms
-#define FILE_NAME "ADXL_CFG.TXT"
-#define TEST_STRING "3.14,6.666\n237,-17,2.34\r\n100,12578\r\n"
+#define FILE_NAME "A8_LOG.DAT"
+#define CFG_FILE_NAME "ADXL_CFG.TXT"
 
 //mod for BLE400
 #define SDC_SCK_PIN SPIM0_SCK_PIN   ///< SDC serial clock (SCK) pin.
@@ -95,12 +95,12 @@
 #define SDC_CS_PIN SPIM0_SS_PIN     ///< SDC chip select (CS) pin.
 
 //configure accelerometer data capture
-#define SIZE_FFT 0x1000             //no of datapoints for each measurement; power of 2 if want to FFT result
-#define TIME_TO_NEXT_MEASUREMENT 10 //in sec
+uint32_t sizeFFT = 0x1000;              //no of datapoints for each measurement; power of 2 if want to FFT result
+uint32_t timeToNextMeasurement = 10;    //in sec
 
 //configure rtc timer
-#define TICK_FREQUENCY 900 // 1111 ms; the filter coefficients are determined for a particular sampling frequency
-#define TIME_0 28800 // the reference duration of eight hours (28,800s)
+uint32_t tickFrequency = 900;           // 1111 ms; the filter coefficients are determined for a particular sampling frequency
+#define TIME_0 28800                    // the reference duration of eight hours (28,800s)
 volatile bool timeOut = false;
 volatile bool tick = false;
 
@@ -151,15 +151,15 @@ __ASM(".global _printf_float");
 
 ////////////////////////////////////// coefficients for digital filter //////////////////////////////////////////
 
-const int32_t calibrationCoeffs[3][2] = {
+int32_t calibrationCoeffs[3][2] = {
     621,103,309,105,-455,104}; // [x,y,z] (x - a0) / a1 to convert 10 bit integer to acceleration in ms-2
     // measured for sum of 16 readings
 
-const int32_t filterCoeffs[3][6] = {
+int32_t filterCoeffs[3][6] = {
 //{277,-511,237,13,1,-12},      {10222,670,1762,3163,6327,3163},	{2909,-5654,2751,2828,-5657,2828} // fs = 1000 Hz
 //{292,-537,248,14,1,-13},	{16911,9440,3842,7548,15097,7548},	{2913,-5653,2746,2828,-5656,2828} // fs = 950 Hz
-{310,-567,260,16,1,-14},	{41084,46550,16780,26103,52207,26103},	{2918,-5652,2742,2828,-5656,2828} // fs = 900 Hz
-//{1445,-2614,1189,87,10,-76},  {589,1541,1132,815,1631,815},           {3000,-5787,2797,2896,-5792,2896} // fs = 800 Hz not stable
+//{310,-567,260,16,1,-14},	{41084,46550,16780,26103,52207,26103},	{2918,-5652,2742,2828,-5656,2828} // fs = 900 Hz
+{1445,-2614,1189,87,10,-76},  {589,1541,1132,815,1631,815},           {3000,-5787,2797,2896,-5792,2896} // fs = 800 Hz not stable
 }; // [Hw,Hl,Hh][a0,a1,a2,b0,b1,b2]
 // can scale these values by a fixed factor without change to the calculation
 
@@ -405,7 +405,7 @@ static void rtc_config(void) {
   uint32_t err_code;
 
   nrf_drv_rtc_config_t config = NRF_DRV_RTC_DEFAULT_CONFIG;
-  config.prescaler = RTC_FREQ_TO_PRESCALER(TICK_FREQUENCY); //Set RTC frequency to 32Hz
+  config.prescaler = RTC_FREQ_TO_PRESCALER(tickFrequency); //Set RTC frequency to 32Hz
   err_code = nrf_drv_rtc_init(&rtc, &config, rtc_handler);
   APP_ERROR_CHECK(err_code);
 
@@ -445,6 +445,7 @@ static void flash_led(uint16_t noTimes, bool forever) {
  */
 static void fatfs_init() {
   FRESULT ff_result;
+  static FATFS fs;
   DSTATUS disk_state = STA_NOINIT;
 
   // Initialize FATFS disk I/O interface by providing the block device.
@@ -475,41 +476,83 @@ static void fatfs_init() {
     flash_led(5, true);
   }
 }
+////////////////////////////////////// readLine //////////////////////////////////////////
+// read in variables according to counter that tracks which lines read 
 
+bool readLine(char *lineFeed, uint16_t *lineNo) 
+{
+  bool gotError = false;
+  if (*lineNo == 1) {
+    int result = sscanf(
+    lineFeed, "%i,%i,%i", 
+    &sizeFFT, 
+    &timeToNextMeasurement,
+    &tickFrequency 
+    );
+    gotError = (result != 3);
+  }
+  else if  ((*lineNo > 1) && (*lineNo < 5))
+    {
+    int result = sscanf(
+    lineFeed, "%i,%i", 
+    &calibrationCoeffs[*lineNo - 2][0],
+    &calibrationCoeffs[*lineNo - 2][1]
+    );
+    gotError = (result != 2);
+    }
+  else if  ((*lineNo > 4) && (*lineNo < 8))
+    {
+    int result = sscanf(
+    lineFeed, "%i,%i,%i,%i,%i,%i", 
+    &filterCoeffs[*lineNo - 5][0],
+    &filterCoeffs[*lineNo - 5][1],
+    &filterCoeffs[*lineNo - 5][2],
+    &filterCoeffs[*lineNo - 5][3],
+    &filterCoeffs[*lineNo - 5][4],
+    &filterCoeffs[*lineNo - 5][5]
+    );
+    gotError = (result != 6);
+    }
+  return (gotError);
+}
 //////////////////////////////////////read_config()//////////////////////////////////////////
 
 /**
  * @brief function to read in measurement parameters:  sample frequency, file size, repeat time, filter coefficients
  */
 static void read_config() {
+  FRESULT ff_result;
   static FIL file;
   uint32_t bytes_read;
   bytes_read = 0;
   const char newLine[2] = {"\n\0"};
   const char *srch_str = (char *)newLine;
 
-  ff_result = f_open(&file, FILE_NAME, FA_READ);
+  ff_result = f_open(&file, CFG_FILE_NAME, FA_READ);
   if (ff_result != FR_OK) {
-    printf("Unable to open or create file: " FILE_NAME ".\r\n");
+//    printf("Unable to open or create file: " CFG_FILE_NAME ".\r\n");
     return;
   }
 
   uint16_t size = f_size(&file);
-  printf("size of the file in bytes = %d\r\n", size);
+//  printf("size of the file in bytes = %d\r\n", size);
+
+  uint16_t whichLine;
+  whichLine = 1;
 
   while (file.fptr < size) {
-    printf("file ptr %i\r\n", (uint32_t)file.fptr);
+//    printf("file ptr %i\r\n", (uint32_t)file.fptr);
     ff_result = f_read(&file, data, sizeof(data) - 1, (UINT *)&bytes_read); // the last item of data is a NULL terminator
-    printf("file ptr %i\r\n", (uint32_t)file.fptr);
-    char *p = (char *)data;
-    char ** new_data = &p;
+//    printf("file ptr %i\r\n", (uint32_t)file.fptr);
    
     if (ff_result != FR_OK) {
-      printf("Unable to read or create file: " FILE_NAME ".\r\n");
+//      printf("Unable to read or create file: " CFG_FILE_NAME ".\r\n");
       return;
     } else {
-      printf("%d bytes read\r\n", bytes_read);
+//      printf("%d bytes read\r\n", bytes_read);
     }
+    char *p = (char *)data;
+    char **new_data = &p;
 
     while (**new_data != NULL) // test for end of buffer
     {
@@ -518,21 +561,21 @@ static void read_config() {
       if ((*(*new_data - 1)) == NULL)              // found new line
       {
         val = strncat(temp, (const char *)old_data, SIZE_BUFF);
-        // add case statement on counter that tracks progressive reading of config parameters 
-        int result = sscanf(temp, "%i,%i,%i", SIZE_FFT, TICK_FREQUENCY, TIME_TO_NEXT_MEASUREMENT);
+        if(readLine(temp, &whichLine) == true) flash_led(2, true); // trap error 
+        ++whichLine;
         *temp = NULL;
-        printf("float read %f,%f\r\n", num1, num2);
+//        printf("float read %f,%f\r\n", num1, num2);
       } else {
-        int bytes_left = *new_data - old_data - 1;
-        printf("bytes left %i\n", bytes_left);
-        val = strncpy(temp, (const char *)old_data, SIZE_BUFF); //save tail of file
-//        temp[bytes_left] = NULL;                                //ensure tail terminated with a NULL
+//        int bytes_left = *new_data - old_data - 1;
+//        printf("bytes left %i\n", bytes_left);
+        val = strncpy(temp, (const char *)old_data, SIZE_BUFF - 1); //save tail of file
       }
     }
   }
   (void)f_close(&file);
   return;
 }
+
 ////////////////////////////////////// file_printf //////////////////////////////////////////
 
 void file_printf(FIL *fp, const char *fmt, ...) {
@@ -1190,6 +1233,8 @@ while (true) {}
 #if USE_SD
   fatfs_init();
 
+  read_config(); // read parameters from config file on SD card
+
   //*************************** find number of first file **************************/
   uint16_t firstFile = 0xffff;
   while ((j < MAX_FILE_NO) && (firstFile == 0xffff)) {
@@ -1223,7 +1268,7 @@ while (true) {}
     timeOut = false;
     nrf_drv_rtc_tick_enable(&rtc, true);
     nrf_drv_rtc_counter_clear(&rtc);
-    err_code = nrf_drv_rtc_cc_set(&rtc, 0, TIME_TO_NEXT_MEASUREMENT * TICK_FREQUENCY, true);
+    err_code = nrf_drv_rtc_cc_set(&rtc, 0, timeToNextMeasurement * tickFrequency, true);
     APP_ERROR_CHECK(err_code);
 
 #if USE_SD
@@ -1288,7 +1333,7 @@ while (true) {}
     flash_led(3, false); // indicate about to start measuring
     uint32_t count = 0;
     uint32_t sum = 0; // sum of frequency-weighted acceleration for xyz axes 
-    while (count < SIZE_FFT) {
+    while (count < sizeFFT) {
       int16_t results[3];
       uint8_t lastValue = (uint8_t)(count % 3); // index on filteredValues which is a cyclic buffer
       while (!tick) {
@@ -1336,7 +1381,7 @@ while (true) {}
 #if USE_SD
     (void)f_close(&dataFile); // file with high res ahv data
     // calculate contribution to daily exposure according to ISO5349
-    float a8 = sqrtf((float)sum / TIME_0 / TICK_FREQUENCY);
+    float a8 = sqrtf((float)sum / TIME_0 / tickFrequency);
     ff_result = f_open(&a8File, FILE_NAME, FA_READ | FA_WRITE | FA_OPEN_APPEND);
     if (ff_result != FR_OK)
     {
