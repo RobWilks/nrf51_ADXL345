@@ -96,7 +96,7 @@
 
 //configure accelerometer data capture
 uint32_t sizeFFT = 0x1000;              //no of datapoints for each measurement; power of 2 if want to FFT result
-uint32_t timeToNextMeasurement = 10;    //in sec
+uint32_t timeToNextMeasurement = 8;    //in sec
 
 //configure rtc timer
 uint32_t tickFrequency = 900;           // 1111 ms; the filter coefficients are determined for a particular sampling frequency
@@ -431,7 +431,7 @@ static void flash_led(uint16_t noTimes, bool forever) {
       LEDS_INVERT(BSP_LED_0_MASK);
       nrf_delay_ms(100);
       LEDS_INVERT(BSP_LED_0_MASK);
-      nrf_delay_ms(150);
+      if (j < noTimes) nrf_delay_ms(150);
     }
     if (forever) {
       nrf_delay_ms(10000 - noTimes * 250);
@@ -561,7 +561,7 @@ static void read_config() {
       if ((*(*new_data - 1)) == NULL)              // found new line
       {
         val = strncat(temp, (const char *)old_data, SIZE_BUFF);
-        if(readLine(temp, &whichLine) == true) flash_led(2, true); // trap error 
+        if(readLine(temp, &whichLine) == true) flash_led(3, true); // trap error 
         ++whichLine;
         *temp = NULL;
 //        printf("float read %f,%f\r\n", num1, num2);
@@ -588,7 +588,7 @@ void file_printf(FIL *fp, const char *fmt, ...) {
   vsnprintf(buf, sizeof(buf), fmt, ap);
   ff_result = f_write(fp, buf, strlen(buf), &bytes_written);
   if (ff_result != FR_OK) {
-    flash_led(2, true);
+    flash_led(3, true);
   }
 
   va_end(ap);
@@ -1330,7 +1330,7 @@ while (true) {}
 
 #else
 
-    flash_led(3, false); // indicate about to start measuring
+    flash_led(2, false); // indicate about to start measuring
     uint32_t count = 0;
     uint32_t sum = 0; // sum of frequency-weighted acceleration for xyz axes 
     while (count < sizeFFT) {
@@ -1378,6 +1378,9 @@ while (true) {}
       sum += (sumThisInterval >> 8); //divide result by 256 to convert to ms-2
       // could measure max here
     }
+//    flash_led(1, false); // indicate finished measuring for scope timing measurement
+
+
 #if USE_SD
     (void)f_close(&dataFile); // file with high res ahv data
     // calculate contribution to daily exposure according to ISO5349
@@ -1385,7 +1388,7 @@ while (true) {}
     ff_result = f_open(&a8File, FILE_NAME, FA_READ | FA_WRITE | FA_OPEN_APPEND);
     if (ff_result != FR_OK)
     {
-        flash_led(2, true);
+        flash_led(3, true);
     }
     file_printf(&a8File, "A8 for file %i = %f\n", j, a8);
     (void)f_close(&a8File); // file with total exposure
